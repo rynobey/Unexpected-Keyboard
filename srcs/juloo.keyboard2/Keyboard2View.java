@@ -476,8 +476,8 @@ public class Keyboard2View extends View
       case String:
         _test_text.append(k.getString());
         break;
-      case Event:
-        if (k.getEvent() == KeyValue.Event.BACKSPACE && _test_text.length() > 0)
+      case Editing:
+        if (k.getEditing() == KeyValue.Editing.BACKSPACE && _test_text.length() > 0)
           _test_text.deleteCharAt(_test_text.length() - 1);
         break;
       default:
