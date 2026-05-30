@@ -188,11 +188,18 @@ public class Keyboard2 extends InputMethodService
     _config.emoji_dictionary = Dictionaries.find_by_name(dicts, "emoji");
   }
 
+  /** Experimental fullscreen landscape split mode is active. */
+  private boolean split_active()
+  {
+    return _config != null && _config.split_test_mode && _config.orientation_landscape;
+  }
+
   private void refresh_candidates_view()
   {
     boolean should_show =
       _config.suggestions_enabled
-      && _config.editor_config.should_show_candidates_view;
+      && _config.editor_config.should_show_candidates_view
+      && !split_active();
     if (should_show)
       _candidates_view.refresh_config(_config);
     _candidates_view.setVisibility(should_show ? View.VISIBLE : View.GONE);
@@ -281,7 +288,7 @@ public class Keyboard2 extends InputMethodService
 
     updateLayoutHeightOf(
             (View) inputArea.getParent(),
-            isFullscreenMode()
+            (isFullscreenMode() || split_active())
                     ? ViewGroup.LayoutParams.MATCH_PARENT
                     : ViewGroup.LayoutParams.WRAP_CONTENT);
     updateLayoutGravityOf((View) inputArea.getParent(), Gravity.BOTTOM);

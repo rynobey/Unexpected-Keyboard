@@ -53,6 +53,26 @@ public class Keyboard2View extends View
   private Theme _theme;
   private Theme.Computed _tc;
 
+  /** Fullscreen landscape split mode (experimental). When active the keyboard
+      fills the window height and is split into a left and right half with a
+      transparent center gap holding a type-test display. */
+  private boolean _split = false;
+  /** Fraction of the width reserved for the center gap in split mode. */
+  private static final float SPLIT_CENTER_RATIO = 0.40f;
+  /** Width (px) of the center gap, 0 when not split. */
+  private float _split_gap = 0f;
+  /** Column (in key-width units) at which the gap is inserted. Keys whose
+      start column is >= this are pushed right by [_split_gap]. MAX when not
+      split so the normal (non-split) geometry is unchanged. */
+  private float _split_col = Float.MAX_VALUE;
+  /** The center rectangle, recomputed in [onMeasure] when split. */
+  private final RectF _center_rect = new RectF();
+  /** Characters typed while in split mode, echoed in the center area. */
+  private final StringBuilder _test_text = new StringBuilder();
+  private final Paint _test_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint _test_hint_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint _test_bg_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
   private static RectF _tmpRect = new RectF();
 
   enum Vertical
@@ -168,6 +188,8 @@ public class Keyboard2View extends View
     // flags.
     _config.handler.key_up(k, mods);
     updateFlags();
+    if (_split)
+      test_capture(k);
     invalidate();
   }
 
@@ -240,18 +262,24 @@ public class Keyboard2View extends View
   private KeyboardData.Key getKeyAtPosition(float tx, float ty)
   {
     KeyboardData.Row row = getRowAtPosition(ty);
-    float x = _marginLeft;
-    if (row == null || tx < x)
+    if (row == null || tx < _marginLeft)
       return null;
+    // [col] accumulates the column position (in key-width units). In split
+    // mode keys at or past [_split_col] are pushed right by [_split_gap];
+    // outside split mode [_split_col] is MAX so no offset is ever added and
+    // this matches the normal left-to-right layout.
+    float col = 0f;
     for (KeyboardData.Key key : row.keys)
     {
-      float xLeft = x + key.shift * _keyWidth;
+      col += key.shift;
+      float off = (col >= _split_col) ? _split_gap : 0f;
+      float xLeft = _marginLeft + col * _keyWidth + off;
       float xRight = xLeft + key.width * _keyWidth;
       if (tx < xLeft)
         return null;
       if (tx < xRight)
         return key;
-      x = xRight;
+      col += key.width;
     }
     return null;
   }
@@ -269,8 +297,26 @@ public class Keyboard2View extends View
     _marginLeft = Math.max(_config.horizontal_margin, _insets_left);
     _marginRight = Math.max(_config.horizontal_margin, _insets_right);
     _marginBottom = _config.margin_bottom + _insets_bottom;
-    _keyWidth = (width - _marginLeft - _marginRight) / _keyboard.keysWidth;
-    _tc = new Theme.Computed(_theme, _config, _keyWidth, _keyboard);
+    _split = _config.split_test_mode && _config.orientation_landscape;
+    float fill_rows = 0f;
+    if (_split)
+    {
+      _split_gap = width * SPLIT_CENTER_RATIO;
+      _split_col = _keyboard.keysWidth / 2f;
+      _keyWidth = (width - _marginLeft - _marginRight - _split_gap) / _keyboard.keysWidth;
+      // Stretch the rows to fill the whole window height.
+      int avail = MeasureSpec.getSize(hSpec);
+      if (avail <= 0)
+        avail = _config.screenHeightPixels;
+      fill_rows = avail - _config.marginTop - _marginBottom;
+    }
+    else
+    {
+      _split_gap = 0f;
+      _split_col = Float.MAX_VALUE;
+      _keyWidth = (width - _marginLeft - _marginRight) / _keyboard.keysWidth;
+    }
+    _tc = new Theme.Computed(_theme, _config, _keyWidth, _keyboard, fill_rows);
     // Compute the size of labels based on the width or the height of keys. The
     // margin around keys is taken into account. Keys normal aspect ratio is
     // assumed to be 3/2 for a 10 columns layout. It's generally more, the
@@ -284,6 +330,15 @@ public class Keyboard2View extends View
     int height =
       (int)(_tc.row_height * _keyboard.keysHeight
           + _config.marginTop + _marginBottom);
+    if (_split)
+    {
+      // Left keys occupy [marginLeft, marginLeft + _split_col*keyWidth]; the
+      // gap follows, then the right keys.
+      _center_rect.left = _marginLeft + _split_col * _keyWidth;
+      _center_rect.right = _center_rect.left + _split_gap;
+      _center_rect.top = _tc.margin_top;
+      _center_rect.bottom = height - _marginBottom;
+    }
     setMeasuredDimension(width, height);
   }
 
@@ -338,15 +393,21 @@ public class Keyboard2View extends View
   @Override
   protected void onDraw(Canvas canvas)
   {
+    if (_split)
+      drawCenterTestArea(canvas);
     float y = _tc.margin_top;
     for (KeyboardData.Row row : _keyboard.rows)
     {
       y += row.shift * _tc.row_height;
-      float x = _marginLeft + _tc.margin_left;
       float keyH = row.height * _tc.row_height - _tc.vertical_margin;
+      // [col] mirrors the accumulation in [getKeyAtPosition] so drawing and
+      // hit-testing stay in sync, including the split-mode gap offset.
+      float col = 0f;
       for (KeyboardData.Key k : row.keys)
       {
-        x += k.shift * _keyWidth;
+        col += k.shift;
+        float off = (col >= _split_col) ? _split_gap : 0f;
+        float x = _marginLeft + _tc.margin_left + col * _keyWidth + off;
         float keyW = _keyWidth * k.width - _tc.horizontal_margin;
         boolean isKeyDown = _pointers.isKeyDown(k);
         Theme.Computed.Key tc_key = isKeyDown ? _tc.key_activated : _tc.key;
@@ -359,9 +420,68 @@ public class Keyboard2View extends View
             drawSubLabel(canvas, k.keys[i], x, y, keyW, keyH, i, isKeyDown, tc_key);
         }
         drawIndication(canvas, k, x, y, keyW, keyH, _tc);
-        x += _keyWidth * k.width;
+        col += k.width;
       }
       y += row.height * _tc.row_height;
+    }
+  }
+
+  /** Draw the center type-test panel: a faint rounded panel showing the
+      characters typed so far (or a hint when empty). */
+  private void drawCenterTestArea(Canvas canvas)
+  {
+    if (_center_rect.width() <= 0f)
+      return;
+    float pad = _center_rect.width() * 0.06f;
+    _test_bg_paint.setColor(_theme.colorKeyActivated);
+    _test_bg_paint.setAlpha(60);
+    float r = Math.min(40f, _center_rect.width() / 12f);
+    canvas.drawRoundRect(_center_rect, r, r, _test_bg_paint);
+    float cx = _center_rect.centerX();
+    if (_test_text.length() == 0)
+    {
+      _test_hint_paint.setColor(_theme.subLabelColor);
+      _test_hint_paint.setTextAlign(Paint.Align.CENTER);
+      _test_hint_paint.setTextSize(Math.min(_center_rect.height() / 12f, _mainLabelSize));
+      canvas.drawText("type-test", cx,
+          _center_rect.centerY() - (_test_hint_paint.ascent() + _test_hint_paint.descent()) / 2f,
+          _test_hint_paint);
+      return;
+    }
+    _test_paint.setColor(_theme.labelColor);
+    _test_paint.setTextAlign(Paint.Align.LEFT);
+    _test_paint.setTextSize(Math.min(_center_rect.height() / 9f, _mainLabelSize * 1.2f));
+    // Show the tail of the buffer that fits on one line, with a caret.
+    float maxW = _center_rect.width() - pad * 2f;
+    String full = _test_text.toString() + "|";
+    int start = 0;
+    while (start < full.length()
+        && _test_paint.measureText(full, start, full.length()) > maxW)
+      start++;
+    String shown = full.substring(start);
+    float ty = _center_rect.centerY() - (_test_paint.ascent() + _test_paint.descent()) / 2f;
+    canvas.drawText(shown, _center_rect.left + pad, ty, _test_paint);
+  }
+
+  /** Append a typed key to the center type-test buffer (split mode only). */
+  private void test_capture(KeyValue k)
+  {
+    if (k == null)
+      return;
+    switch (k.getKind())
+    {
+      case Char:
+        _test_text.append(k.getChar());
+        break;
+      case String:
+        _test_text.append(k.getString());
+        break;
+      case Event:
+        if (k.getEvent() == KeyValue.Event.BACKSPACE && _test_text.length() > 0)
+          _test_text.deleteCharAt(_test_text.length() - 1);
+        break;
+      default:
+        break;
     }
   }
 

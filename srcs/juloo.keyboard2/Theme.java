@@ -104,10 +104,22 @@ public class Theme
 
     public Computed(Theme theme, Config config, float keyWidth, KeyboardData layout)
     {
-      // Make sure that the layout isn't higher than the screen. Take the
-      // height of the candidates view into account.
-      row_height = Math.min(config.keyboard_rows_height_pixels,
-          (config.screenHeightPixels - config.keyboard_rows_height_pixels) / layout.keysHeight);
+      this(theme, config, keyWidth, layout, 0f);
+    }
+
+    /** [fill_rows_height], when > 0, is the total height (px) the rows should
+        occupy. Used by the fullscreen split mode to stretch the keyboard to
+        the whole window height instead of the usual capped height. */
+    public Computed(Theme theme, Config config, float keyWidth,
+        KeyboardData layout, float fill_rows_height)
+    {
+      if (fill_rows_height > 0f)
+        row_height = fill_rows_height / layout.keysHeight;
+      else
+        // Make sure that the layout isn't higher than the screen. Take the
+        // height of the candidates view into account.
+        row_height = Math.min(config.keyboard_rows_height_pixels,
+            (config.screenHeightPixels - config.keyboard_rows_height_pixels) / layout.keysHeight);
       vertical_margin = config.key_vertical_margin * row_height;
       horizontal_margin = config.key_horizontal_margin * keyWidth;
       // Add half of the key margin on the left and on the top as it's also
