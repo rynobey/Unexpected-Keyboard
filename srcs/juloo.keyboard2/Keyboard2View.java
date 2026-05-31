@@ -75,51 +75,115 @@ public class Keyboard2View extends View
   private final Paint _test_bg_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
   private final Paint _tri_border_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-  /** A key occupying a triangle in split mode. [key] may be null for an unused
-      slot. Vertices are absolute view coordinates. [onEdge] marks corners that
-      lie on a physical screen edge (top, bottom, or the outer side) — swipe
-      sub-labels are not placed there. */
+  /** A key occupying a convex polygon (a triangle, or a quad once a screen
+      corner is chamfered) in split mode. [key] may be null for an unused slot.
+      Vertices are absolute view coordinates in order. [onEdge] marks vertices
+      that lie on a physical screen edge (top, bottom, or the outer side) —
+      swipe sub-labels are not placed there. */
   static final class TriKey
   {
     final KeyboardData.Key key;
-    final float[] xs;
-    final float[] ys;
-    final boolean[] onEdge;
-    final float cx; // label anchor (centroid)
-    final float cy;
     final float labelSize;
+    final float top, bottom, outerX;
+    float[] xs;
+    float[] ys;
+    boolean[] onEdge;
+    float cx; // label anchor (centroid)
+    float cy;
     TriKey(KeyboardData.Key k, float labelSize, float top, float bottom,
-        float outerX, float x0, float y0, float x1, float y1, float x2, float y2)
+        float outerX, float... coords)
     {
       key = k;
       this.labelSize = labelSize;
-      xs = new float[]{ x0, x1, x2 };
-      ys = new float[]{ y0, y1, y2 };
-      cx = (x0 + x1 + x2) / 3f;
-      cy = (y0 + y1 + y2) / 3f;
-      onEdge = new boolean[]{
-        near(y0, top) || near(y0, bottom) || near(x0, outerX),
-        near(y1, top) || near(y1, bottom) || near(x1, outerX),
-        near(y2, top) || near(y2, bottom) || near(x2, outerX),
-      };
+      this.top = top;
+      this.bottom = bottom;
+      this.outerX = outerX;
+      int n = coords.length / 2;
+      xs = new float[n];
+      ys = new float[n];
+      for (int i = 0; i < n; i++)
+      {
+        xs[i] = coords[2 * i];
+        ys[i] = coords[2 * i + 1];
+      }
+      recompute();
+    }
+
+    private void recompute()
+    {
+      int n = xs.length;
+      float sx = 0f, sy = 0f;
+      onEdge = new boolean[n];
+      for (int i = 0; i < n; i++)
+      {
+        sx += xs[i];
+        sy += ys[i];
+        onEdge[i] = near(ys[i], top) || near(ys[i], bottom) || near(xs[i], outerX);
+      }
+      cx = sx / n;
+      cy = sy / n;
     }
 
     private static boolean near(float a, float b) { return Math.abs(a - b) < 1.5f; }
 
-    /** Barycentric sign test for point-in-triangle. */
-    boolean contains(float px, float py)
+    /** Replace the vertex at (px,py) with a chamfer (slanted edge) of length
+        [cr] cut across the corner, turning that corner into two vertices. */
+    boolean chamfer(float px, float py, float cr)
     {
-      float d1 = sign(px, py, xs[0], ys[0], xs[1], ys[1]);
-      float d2 = sign(px, py, xs[1], ys[1], xs[2], ys[2]);
-      float d3 = sign(px, py, xs[2], ys[2], xs[0], ys[0]);
-      boolean neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-      boolean pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-      return !(neg && pos);
+      int n = xs.length, i = -1;
+      for (int j = 0; j < n; j++)
+        if (near(xs[j], px) && near(ys[j], py)) { i = j; break; }
+      if (i < 0)
+        return false;
+      int prev = (i - 1 + n) % n, next = (i + 1) % n;
+      // Only bevel when the two edges at this corner run along the screen
+      // edges (one vertical, one horizontal through the corner).
+      boolean prevV = near(xs[prev], px), prevH = near(ys[prev], py);
+      boolean nextV = near(xs[next], px), nextH = near(ys[next], py);
+      if (!((prevV && nextH) || (prevH && nextV)))
+        return false;
+      float ax = chamferPt(xs[i], xs[prev], cr), ay = chamferPt(ys[i], ys[prev], cr);
+      float bx = chamferPt(xs[i], xs[next], cr), by = chamferPt(ys[i], ys[next], cr);
+      float[] nx = new float[n + 1], ny = new float[n + 1];
+      int w = 0;
+      for (int j = 0; j < n; j++)
+      {
+        if (j == i)
+        {
+          nx[w] = ax; ny[w++] = ay;
+          nx[w] = bx; ny[w++] = by;
+        }
+        else
+        {
+          nx[w] = xs[j]; ny[w++] = ys[j];
+        }
+      }
+      xs = nx; ys = ny;
+      recompute();
+      return true;
     }
 
-    private static float sign(float px, float py, float ax, float ay, float bx, float by)
+    /** Point [cr] away from [from] toward [to], clamped to the midpoint. */
+    private static float chamferPt(float from, float to, float cr)
     {
-      return (px - bx) * (ay - by) - (ax - bx) * (py - by);
+      float d = to - from;
+      float len = Math.abs(d);
+      float t = (len <= 0f) ? 0f : Math.min(cr, len * 0.5f) / len;
+      return from + d * t;
+    }
+
+    /** Even-odd ray-cast point-in-polygon (handles triangle or quad). */
+    boolean contains(float px, float py)
+    {
+      boolean in = false;
+      int n = xs.length;
+      for (int i = 0, j = n - 1; i < n; j = i++)
+      {
+        if (((ys[i] > py) != (ys[j] > py))
+            && (px < (xs[j] - xs[i]) * (py - ys[i]) / (ys[j] - ys[i]) + xs[i]))
+          in = !in;
+      }
+      return in;
     }
   }
 
@@ -476,7 +540,8 @@ public class Keyboard2View extends View
   {
     _split_keys.clear();
     float top = _tc.margin_top;
-    float bottom = viewH - _marginBottom;
+    // Fill all the way to the bottom edge of the screen.
+    float bottom = viewH;
     // Group each half's keys by row so the triangle layout roughly follows the
     // standard QWERTY arrangement (one band per row, top to bottom).
     ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_rows(true);
@@ -491,6 +556,39 @@ public class Keyboard2View extends View
     // Outer side fills to the screen edge (0 on the left, viewW on the right).
     tessellateRows(0f, top, _center_rect.left, bottom, 0f, leftRows);
     tessellateRows(_center_rect.right, top, viewW, bottom, viewW, rightRows);
+    // Bevel the two bottom screen corners to follow the Pixel's rounded
+    // corners with a slanted edge.
+    float cr = corner_radius_px();
+    if (cr > 0f)
+    {
+      chamfer_corner(0f, bottom, cr);
+      chamfer_corner(viewW, bottom, cr);
+    }
+  }
+
+  /** Radius (px) of the device's rounded corners, with a sensible fallback. */
+  private float corner_radius_px()
+  {
+    float fallback = getResources().getDisplayMetrics().density * 20f;
+    if (VERSION.SDK_INT >= 31)
+    {
+      WindowInsets wi = getRootWindowInsets();
+      if (wi != null)
+      {
+        android.view.RoundedCorner rc =
+          wi.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_LEFT);
+        if (rc != null && rc.getRadius() > 0)
+          return rc.getRadius();
+      }
+    }
+    return fallback;
+  }
+
+  private void chamfer_corner(float px, float py, float cr)
+  {
+    for (TriKey tk : _split_keys)
+      if (tk.chamfer(px, py, cr))
+        return;
   }
 
   private KeyboardData.Key make_space()
@@ -561,7 +659,17 @@ public class Keyboard2View extends View
         float lx = x0 + c * cw, rx = lx + cw;
         KeyboardData.Key kL = idx < n ? keys.get(idx) : null; idx++;
         KeyboardData.Key kR = idx < n ? keys.get(idx) : null; idx++;
-        if ((c & 1) == 0)
+        boolean odd = (c & 1) == 1;
+        // On the bottom band, force the outer-corner cell's diagonal so the
+        // screen-corner key is a clean right triangle (both its corner edges
+        // run along screen edges), ready to be chamfered for rounded corners.
+        boolean bottom_band = (ri == R - 1);
+        boolean right_half = outerX > 0f;
+        if (bottom_band && right_half && c == nCells - 1)
+          odd = true;
+        else if (bottom_band && !right_half && c == 0)
+          odd = false;
+        if (!odd)
         {
           // Diagonal top-left to bottom-right: left triangle then right.
           _split_keys.add(new TriKey(kL, labelSize, y0, y1, outerX, lx, by0, rx, by1, lx, by1));
@@ -586,8 +694,8 @@ public class Keyboard2View extends View
       Theme.Computed.Key tc_key = down ? _tc.key_activated : _tc.key;
       _tri_path.reset();
       _tri_path.moveTo(tk.xs[0], tk.ys[0]);
-      _tri_path.lineTo(tk.xs[1], tk.ys[1]);
-      _tri_path.lineTo(tk.xs[2], tk.ys[2]);
+      for (int i = 1; i < tk.xs.length; i++)
+        _tri_path.lineTo(tk.xs[i], tk.ys[i]);
       _tri_path.close();
       canvas.drawPath(_tri_path, tc_key.bg_paint);
       canvas.drawPath(_tri_path, _tri_border_paint);
@@ -606,7 +714,7 @@ public class Keyboard2View extends View
         }
       }
       // Swipe sub-keys: only on corners that aren't on a physical screen edge.
-      for (int i = 0; i < 3; i++)
+      for (int i = 0; i < tk.xs.length; i++)
       {
         if (tk.onEdge[i])
           continue;
