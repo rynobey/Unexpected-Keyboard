@@ -623,16 +623,27 @@ public class Keyboard2View extends View
     return r;
   }
 
-  /** Left half of the dedicated QWERTY split layout. */
+  /** An arrows key: tap = left, swipe for the other directions. */
+  private KeyboardData.Key arrows_key()
+  {
+    return KeyboardData.Key.EMPTY
+      .withKeyValue(0, KeyValue.getKeyByName("left"))
+      .withKeyValue(6, KeyValue.getKeyByName("right")) // E
+      .withKeyValue(7, KeyValue.getKeyByName("up"))    // N
+      .withKeyValue(8, KeyValue.getKeyByName("down")); // S
+  }
+
+  /** Left half of the dedicated QWERTY split layout. esc/tab/fn/enter are
+      inward (toward center = E) swipe modifiers. */
   private ArrayList<ArrayList<KeyboardData.Key>> split_layout_left()
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
-    rows.add(mkrow(sk("1", 1, "esc"), sk("2"), sk("3"), sk("4"), sk("5")));
-    rows.add(mkrow(sk("q", 5, "tab"), sk("w"), sk("e"), sk("r"), sk("t")));
+    rows.add(mkrow(sk("1", 6, "esc"), sk("2"), sk("3"), sk("4"), sk("5")));
+    rows.add(mkrow(sk("q", 6, "tab"), sk("w"), sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
-    rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c")));
-    rows.add(mkrow(sk("ctrl", 1, "fn"), sk("alt"), sk("space", 6, "enter")));
+    rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c"), sk("v")));
+    rows.add(mkrow(sk("ctrl", 6, "fn"), sk("alt"), sk("space", 6, "enter")));
     return rows;
   }
 
@@ -644,8 +655,8 @@ public class Keyboard2View extends View
     rows.add(mkrow(sk("6"), sk("7"), sk("8"), sk("9"), sk("0")));
     rows.add(mkrow(sk("y"), sk("u"), sk("i"), sk("o"), sk("p")));
     rows.add(mkrow(sk("h"), sk("j"), sk("k"), sk("l")));
-    rows.add(mkrow(sk("v"), sk("b"), sk("n"), sk("m"), sk("backspace")));
-    rows.add(mkrow(sk("space", 6, "enter"), sk("alt"), sk("ctrl")));
+    rows.add(mkrow(sk("b"), sk("n"), sk("m"), sk("backspace")));
+    rows.add(mkrow(sk("space"), arrows_key(), sk("enter")));
     return rows;
   }
 
@@ -808,6 +819,29 @@ public class Keyboard2View extends View
           continue;
         float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.32f;
         float ay = tk.ys[i] + (tk.cy - tk.ys[i]) * 0.32f;
+        Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
+            labelColor(sk, down, true), tk.labelSize * 0.6f, Paint.Align.CENTER);
+        canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
+      }
+      // Orthogonal swipe sub-keys (N/S/E/W) drawn at edge midpoints, skipping
+      // edges that lie along a physical screen edge.
+      int n = tk.xs.length;
+      for (int i = 0; i < n; i++)
+      {
+        int j = (i + 1) % n;
+        if (tk.onEdge[i] && tk.onEdge[j])
+          continue;
+        float mx = (tk.xs[i] + tk.xs[j]) / 2f, my = (tk.ys[i] + tk.ys[j]) / 2f;
+        float dx = mx - tk.cx, dy = my - tk.cy;
+        // 5=W 6=E 7=N 8=S
+        int sub = (Math.abs(dx) > Math.abs(dy)) ? (dx > 0 ? 6 : 5) : (dy > 0 ? 8 : 7);
+        if (tk.key.keys[sub] == null)
+          continue;
+        KeyValue sk = modifyKey(tk.key.keys[sub], _mods);
+        if (sk == null)
+          continue;
+        float ax = mx + (tk.cx - mx) * 0.30f;
+        float ay = my + (tk.cy - my) * 0.30f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
             labelColor(sk, down, true), tk.labelSize * 0.6f, Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
