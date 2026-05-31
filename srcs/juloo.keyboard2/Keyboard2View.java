@@ -76,22 +76,35 @@ public class Keyboard2View extends View
   private final Paint _tri_border_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
   /** A key occupying a triangle in split mode. [key] may be null for an unused
-      slot. Vertices are absolute view coordinates. */
+      slot. Vertices are absolute view coordinates. [onEdge] marks corners that
+      lie on a physical screen edge (top, bottom, or the outer side) — swipe
+      sub-labels are not placed there. */
   static final class TriKey
   {
     final KeyboardData.Key key;
     final float[] xs;
     final float[] ys;
+    final boolean[] onEdge;
     final float cx; // label anchor (centroid)
     final float cy;
-    TriKey(KeyboardData.Key k, float x0, float y0, float x1, float y1, float x2, float y2)
+    final float labelSize;
+    TriKey(KeyboardData.Key k, float labelSize, float top, float bottom,
+        float outerX, float x0, float y0, float x1, float y1, float x2, float y2)
     {
       key = k;
+      this.labelSize = labelSize;
       xs = new float[]{ x0, x1, x2 };
       ys = new float[]{ y0, y1, y2 };
       cx = (x0 + x1 + x2) / 3f;
       cy = (y0 + y1 + y2) / 3f;
+      onEdge = new boolean[]{
+        near(y0, top) || near(y0, bottom) || near(x0, outerX),
+        near(y1, top) || near(y1, bottom) || near(x1, outerX),
+        near(y2, top) || near(y2, bottom) || near(x2, outerX),
+      };
     }
+
+    private static boolean near(float a, float b) { return Math.abs(a - b) < 1.5f; }
 
     /** Barycentric sign test for point-in-triangle. */
     boolean contains(float px, float py)
@@ -457,82 +470,108 @@ public class Keyboard2View extends View
   }
 
   /** Build the interleaved triangle tessellation for both halves. Called from
-      [onMeasure] in split mode. */
+      [onMeasure] in split mode. Each half extends to the physical screen edge
+      (into the display cutout) on its outer side. */
   private void buildSplitTriangles(int viewW, int viewH)
   {
     _split_keys.clear();
     float top = _tc.margin_top;
     float bottom = viewH - _marginBottom;
-    // Split the layout's keys into a left and right half by column.
-    ArrayList<KeyboardData.Key> left = new ArrayList<KeyboardData.Key>();
-    ArrayList<KeyboardData.Key> right = new ArrayList<KeyboardData.Key>();
-    float splitCol = _keyboard.keysWidth / 2f;
-    for (KeyboardData.Row row : _keyboard.rows)
-    {
-      float col = 0f;
-      for (KeyboardData.Key k : row.keys)
-      {
-        col += k.shift;
-        if (col + k.width / 2f < splitCol)
-          left.add(k);
-        else
-          right.add(k);
-        col += k.width;
-      }
-    }
-    // Duplicate a space key onto both halves.
-    KeyboardData.Key space =
-      KeyboardData.Key.EMPTY.withKeyValue(0, KeyValue.getKeyByName("space"));
-    left.add(space);
-    right.add(space);
+    // Group each half's keys by row so the triangle layout roughly follows the
+    // standard QWERTY arrangement (one band per row, top to bottom).
+    ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_rows(true);
+    ArrayList<ArrayList<KeyboardData.Key>> rightRows = split_rows(false);
+    // Duplicate a space key onto the bottom row of each half.
+    leftRows.get(leftRows.size() - 1).add(make_space());
+    rightRows.get(rightRows.size() - 1).add(make_space());
     _tri_border_paint.setStyle(Paint.Style.STROKE);
     _tri_border_paint.setStrokeWidth(
         Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
     _tri_border_paint.setColor(_theme.colorKeyActivated);
-    tessellateHalf(_marginLeft, top, _center_rect.left, bottom, left);
-    tessellateHalf(_center_rect.right, top, viewW - _marginRight, bottom, right);
+    // Outer side fills to the screen edge (0 on the left, viewW on the right).
+    tessellateRows(0f, top, _center_rect.left, bottom, 0f, leftRows);
+    tessellateRows(_center_rect.right, top, viewW, bottom, viewW, rightRows);
   }
 
-  /** Fill the rectangle [x0,y0,x1,y1] with diagonal-split cells, alternating
-      the diagonal per cell so the triangles interleave, and assign [keys] to
-      the triangle slots in order. Outer edges stay straight. */
-  private void tessellateHalf(float x0, float y0, float x1, float y1,
-      ArrayList<KeyboardData.Key> keys)
+  private KeyboardData.Key make_space()
   {
-    int K = keys.size();
-    if (K <= 0 || x1 <= x0 || y1 <= y0)
+    return KeyboardData.Key.EMPTY.withKeyValue(0, KeyValue.getKeyByName("space"));
+  }
+
+  private static boolean is_space(KeyboardData.Key k)
+  {
+    return k.keys[0] != null && k.keys[0].getKind() == KeyValue.Kind.Editing
+      && k.keys[0].getEditing() == KeyValue.Editing.SPACE_BAR;
+  }
+
+  /** The keys of each layout row that belong to one half, in order. Existing
+      space keys are dropped (we add our own per half). Always returns at least
+      one (possibly empty) row. */
+  private ArrayList<ArrayList<KeyboardData.Key>> split_rows(boolean left_half)
+  {
+    ArrayList<ArrayList<KeyboardData.Key>> rows =
+      new ArrayList<ArrayList<KeyboardData.Key>>();
+    float splitCol = _keyboard.keysWidth / 2f;
+    for (KeyboardData.Row row : _keyboard.rows)
+    {
+      ArrayList<KeyboardData.Key> half = new ArrayList<KeyboardData.Key>();
+      float col = 0f;
+      for (KeyboardData.Key k : row.keys)
+      {
+        col += k.shift;
+        boolean in_half = (col + k.width / 2f < splitCol) == left_half;
+        if (in_half && !is_space(k))
+          half.add(k);
+        col += k.width;
+      }
+      if (!half.isEmpty())
+        rows.add(half);
+    }
+    if (rows.isEmpty())
+      rows.add(new ArrayList<KeyboardData.Key>());
+    return rows;
+  }
+
+  /** Lay out [rows] as horizontal bands (top to bottom) filling [x0,y0,x1,y1].
+      Each band packs its keys left to right as diagonal-split triangle pairs,
+      alternating the diagonal so the keys interleave. [outerX] is the physical
+      screen edge of this half. */
+  private void tessellateRows(float x0, float y0, float x1, float y1,
+      float outerX, ArrayList<ArrayList<KeyboardData.Key>> rows)
+  {
+    int R = rows.size();
+    if (R <= 0 || x1 <= x0 || y1 <= y0)
       return;
     float W = x1 - x0;
-    float H = y1 - y0;
-    // Aim for ~K/2 near-square cells, using the tall aspect ratio so cells
-    // stack vertically (few columns, many rows) instead of becoming slivers.
-    int cells = (int)Math.ceil(K / 2.0);
-    int nCols = Math.max(1, Math.round((float)Math.sqrt(cells * W / H)));
-    int nRows = (int)Math.ceil((double)cells / nCols);
-    while (2 * nCols * nRows < K)
-      nRows++;
-    float cw = W / nCols;
-    float ch = H / nRows;
-    int idx = 0;
-    for (int r = 0; r < nRows; r++)
+    float bandH = (y1 - y0) / R;
+    for (int ri = 0; ri < R; ri++)
     {
-      for (int c = 0; c < nCols; c++)
+      ArrayList<KeyboardData.Key> keys = rows.get(ri);
+      int n = keys.size();
+      if (n <= 0)
+        continue;
+      float by0 = y0 + ri * bandH;
+      float by1 = by0 + bandH;
+      int nCells = (int)Math.ceil(n / 2.0);
+      float cw = W / nCells;
+      float labelSize = Math.min(cw, bandH) * 0.30f;
+      int idx = 0;
+      for (int c = 0; c < nCells; c++)
       {
-        float lx = x0 + c * cw, ty = y0 + r * ch;
-        float rx = lx + cw, by = ty + ch;
-        KeyboardData.Key kA = idx < K ? keys.get(idx) : null; idx++;
-        KeyboardData.Key kB = idx < K ? keys.get(idx) : null; idx++;
-        if (((r + c) & 1) == 0)
+        float lx = x0 + c * cw, rx = lx + cw;
+        KeyboardData.Key kL = idx < n ? keys.get(idx) : null; idx++;
+        KeyboardData.Key kR = idx < n ? keys.get(idx) : null; idx++;
+        if ((c & 1) == 0)
         {
-          // Diagonal top-left to bottom-right.
-          _split_keys.add(new TriKey(kA, lx, ty, rx, ty, rx, by));
-          _split_keys.add(new TriKey(kB, lx, ty, rx, by, lx, by));
+          // Diagonal top-left to bottom-right: left triangle then right.
+          _split_keys.add(new TriKey(kL, labelSize, y0, y1, outerX, lx, by0, rx, by1, lx, by1));
+          _split_keys.add(new TriKey(kR, labelSize, y0, y1, outerX, lx, by0, rx, by0, rx, by1));
         }
         else
         {
-          // Diagonal top-right to bottom-left.
-          _split_keys.add(new TriKey(kA, lx, ty, rx, ty, lx, by));
-          _split_keys.add(new TriKey(kB, rx, ty, rx, by, lx, by));
+          // Diagonal top-right to bottom-left: left triangle then right.
+          _split_keys.add(new TriKey(kL, labelSize, y0, y1, outerX, lx, by0, rx, by0, lx, by1));
+          _split_keys.add(new TriKey(kR, labelSize, y0, y1, outerX, rx, by0, rx, by1, lx, by1));
         }
       }
     }
@@ -552,17 +591,39 @@ public class Keyboard2View extends View
       _tri_path.close();
       canvas.drawPath(_tri_path, tc_key.bg_paint);
       canvas.drawPath(_tri_path, _tri_border_paint);
-      if (tk.key != null && tk.key.keys[0] != null)
+      if (tk.key == null)
+        continue;
+      if (tk.key.keys[0] != null)
       {
         KeyValue kv = modifyKey(tk.key.keys[0], _mods);
         if (kv != null)
         {
           Paint p = tc_key.label_paint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-              labelColor(kv, down, false), _mainLabelSize);
+              labelColor(kv, down, false), tk.labelSize);
           p.setTextAlign(Paint.Align.CENTER);
           canvas.drawText(kv.getString(), tk.cx,
               tk.cy - (p.ascent() + p.descent()) / 2f, p);
         }
+      }
+      // Swipe sub-keys: only on corners that aren't on a physical screen edge.
+      for (int i = 0; i < 3; i++)
+      {
+        if (tk.onEdge[i])
+          continue;
+        float dx = tk.xs[i] - tk.cx, dy = tk.ys[i] - tk.cy;
+        // Map the corner direction to one of the four diagonal sub-key slots:
+        // 1=NW, 2=NE, 3=SW, 4=SE (see LABEL_POSITION_*).
+        int sub = (dx < 0) ? (dy < 0 ? 1 : 3) : (dy < 0 ? 2 : 4);
+        if (tk.key.keys[sub] == null)
+          continue;
+        KeyValue sk = modifyKey(tk.key.keys[sub], _mods);
+        if (sk == null)
+          continue;
+        float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.32f;
+        float ay = tk.ys[i] + (tk.cy - tk.ys[i]) * 0.32f;
+        Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
+            labelColor(sk, down, true), tk.labelSize * 0.6f, Paint.Align.CENTER);
+        canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }
     }
   }
