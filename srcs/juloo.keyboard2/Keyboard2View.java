@@ -62,6 +62,9 @@ public class Keyboard2View extends View
   private boolean _split = false;
   /** Fraction of the width reserved for the center gap in split mode. */
   private static final float SPLIT_CENTER_RATIO = 0.60f;
+  /** Rows with at most this many keys are laid out as rectangles instead of
+      interleaved triangles. */
+  private static final int SPLIT_RECT_MAX = 4;
   /** The center rectangle, recomputed in [onMeasure] when split. */
   private final RectF _center_rect = new RectF();
   /** The triangle (and occasional rectangle) keys of both halves, rebuilt in
@@ -546,9 +549,11 @@ public class Keyboard2View extends View
     // standard QWERTY arrangement (one band per row, top to bottom).
     ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_rows(true);
     ArrayList<ArrayList<KeyboardData.Key>> rightRows = split_rows(false);
-    // Duplicate a space key onto the bottom row of each half.
+    // Duplicate a space key onto the bottom row of each half, placed on the
+    // inner (center-adjacent) edge: right end of the left half, left end of
+    // the right half.
     leftRows.get(leftRows.size() - 1).add(make_space());
-    rightRows.get(rightRows.size() - 1).add(make_space());
+    rightRows.get(rightRows.size() - 1).add(0, make_space());
     _tri_border_paint.setStyle(Paint.Style.STROKE);
     _tri_border_paint.setStrokeWidth(
         Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
@@ -644,6 +649,7 @@ public class Keyboard2View extends View
       return;
     float W = x1 - x0;
     float bandH = (y1 - y0) / R;
+    boolean right_half = outerX > 0f;
     for (int ri = 0; ri < R; ri++)
     {
       ArrayList<KeyboardData.Key> keys = rows.get(ri);
@@ -652,6 +658,19 @@ public class Keyboard2View extends View
         continue;
       float by0 = y0 + ri * bandH;
       float by1 = by0 + bandH;
+      if (n <= SPLIT_RECT_MAX)
+      {
+        // Sparse row: one rectangle per key, left to right.
+        float rw = W / n;
+        float labelSize = Math.min(rw, bandH) * 0.30f;
+        for (int k = 0; k < n; k++)
+        {
+          float lx = x0 + k * rw, rx = lx + rw;
+          _split_keys.add(new TriKey(keys.get(k), labelSize, y0, y1, outerX,
+                lx, by0, rx, by0, rx, by1, lx, by1));
+        }
+        continue;
+      }
       int nCells = (int)Math.ceil(n / 2.0);
       float cw = W / nCells;
       float labelSize = Math.min(cw, bandH) * 0.30f;
@@ -659,23 +678,38 @@ public class Keyboard2View extends View
       for (int c = 0; c < nCells; c++)
       {
         float lx = x0 + c * cw, rx = lx + cw;
+        boolean first = (c == 0), last = (c == nCells - 1);
+        // The four screen corners: the corner key is the triangle whose
+        // slanted edge faces the corner, leaving the corner itself as a
+        // bevel (the opposite triangle is dropped).
+        int corner = -1; // 0=TL 1=TR 2=BL 3=BR
+        if (ri == 0 && !right_half && first) corner = 0;
+        else if (ri == 0 && right_half && last) corner = 1;
+        else if (ri == R - 1 && !right_half && first) corner = 2;
+        else if (ri == R - 1 && right_half && last) corner = 3;
+        if (corner >= 0)
+        {
+          KeyboardData.Key k = idx < n ? keys.get(idx) : null; idx++;
+          switch (corner)
+          {
+            case 0: // top-left: keep lower-right triangle "/q|"
+              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, rx, by0, rx, by1, lx, by1));
+              break;
+            case 1: // top-right: keep lower-left triangle "|p\"
+              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, lx, by0, rx, by1, lx, by1));
+              break;
+            case 2: // bottom-left: keep upper-right triangle
+              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, lx, by0, rx, by0, rx, by1));
+              break;
+            default: // bottom-right: keep upper-left triangle
+              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, lx, by0, rx, by0, lx, by1));
+              break;
+          }
+          continue;
+        }
         KeyboardData.Key kL = idx < n ? keys.get(idx) : null; idx++;
         KeyboardData.Key kR = idx < n ? keys.get(idx) : null; idx++;
-        boolean odd = (c & 1) == 1;
-        // At each screen corner, force the corner cell's diagonal so the
-        // corner key is a clean right triangle (both its corner edges run
-        // along screen edges), ready to be chamfered for rounded corners.
-        boolean right_half = outerX > 0f;
-        boolean first = (c == 0), last = (c == nCells - 1);
-        if (ri == 0 && !right_half && first)
-          odd = true;          // top-left
-        else if (ri == 0 && right_half && last)
-          odd = false;         // top-right
-        else if (ri == R - 1 && !right_half && first)
-          odd = false;         // bottom-left
-        else if (ri == R - 1 && right_half && last)
-          odd = true;          // bottom-right
-        if (!odd)
+        if ((c & 1) == 0)
         {
           // Diagonal top-left to bottom-right: left triangle then right.
           _split_keys.add(new TriKey(kL, labelSize, y0, y1, outerX, lx, by0, rx, by1, lx, by1));
