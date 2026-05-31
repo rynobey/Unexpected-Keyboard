@@ -542,15 +542,10 @@ public class Keyboard2View extends View
     // Fill all the way to the top and bottom edges of the screen.
     float top = 0f;
     float bottom = viewH;
-    // Group each half's keys by row so the triangle layout roughly follows the
-    // standard QWERTY arrangement (one band per row, top to bottom).
-    ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_rows(true);
-    ArrayList<ArrayList<KeyboardData.Key>> rightRows = split_rows(false);
-    // Duplicate a space key onto the bottom row of each half, placed on the
-    // inner (center-adjacent) edge: right end of the left half, left end of
-    // the right half.
-    leftRows.get(leftRows.size() - 1).add(make_space());
-    rightRows.get(rightRows.size() - 1).add(0, make_space());
+    // Dedicated QWERTY split layout (number row on top, modifiers at the
+    // bottom, esc/tab/fn as swipe modifiers).
+    ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_layout_left();
+    ArrayList<ArrayList<KeyboardData.Key>> rightRows = split_layout_right();
     _tri_border_paint.setStyle(Paint.Style.STROKE);
     _tri_border_paint.setStrokeWidth(
         Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
@@ -606,31 +601,51 @@ public class Keyboard2View extends View
       && k.keys[0].getEditing() == KeyValue.Editing.SPACE_BAR;
   }
 
-  /** The keys of each layout row that belong to one half, in order. Existing
-      space keys are dropped (we add our own per half). Always returns at least
-      one (possibly empty) row. */
-  private ArrayList<ArrayList<KeyboardData.Key>> split_rows(boolean left_half)
+  // Swipe-direction slots: 1=NW 2=NE 3=SW 4=SE 5=W 6=E 7=N 8=S.
+
+  /** Build a key with a main value and no swipes. */
+  private KeyboardData.Key sk(String name)
+  {
+    return KeyboardData.Key.EMPTY.withKeyValue(0, KeyValue.getKeyByName(name));
+  }
+
+  /** Build a key with a main value and one swipe modifier. */
+  private KeyboardData.Key sk(String name, int dir, String swipe)
+  {
+    return sk(name).withKeyValue(dir, KeyValue.getKeyByName(swipe));
+  }
+
+  private ArrayList<KeyboardData.Key> mkrow(KeyboardData.Key... ks)
+  {
+    ArrayList<KeyboardData.Key> r = new ArrayList<KeyboardData.Key>();
+    for (KeyboardData.Key k : ks)
+      r.add(k);
+    return r;
+  }
+
+  /** Left half of the dedicated QWERTY split layout. */
+  private ArrayList<ArrayList<KeyboardData.Key>> split_layout_left()
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
-    float splitCol = _keyboard.keysWidth / 2f;
-    for (KeyboardData.Row row : _keyboard.rows)
-    {
-      ArrayList<KeyboardData.Key> half = new ArrayList<KeyboardData.Key>();
-      float col = 0f;
-      for (KeyboardData.Key k : row.keys)
-      {
-        col += k.shift;
-        boolean in_half = (col + k.width / 2f < splitCol) == left_half;
-        if (in_half && !is_space(k))
-          half.add(k);
-        col += k.width;
-      }
-      if (!half.isEmpty())
-        rows.add(half);
-    }
-    if (rows.isEmpty())
-      rows.add(new ArrayList<KeyboardData.Key>());
+    rows.add(mkrow(sk("1", 1, "esc"), sk("2"), sk("3"), sk("4"), sk("5")));
+    rows.add(mkrow(sk("q", 5, "tab"), sk("w"), sk("e"), sk("r"), sk("t")));
+    rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
+    rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c")));
+    rows.add(mkrow(sk("ctrl", 1, "fn"), sk("alt"), sk("space", 6, "enter")));
+    return rows;
+  }
+
+  /** Right half of the dedicated QWERTY split layout. */
+  private ArrayList<ArrayList<KeyboardData.Key>> split_layout_right()
+  {
+    ArrayList<ArrayList<KeyboardData.Key>> rows =
+      new ArrayList<ArrayList<KeyboardData.Key>>();
+    rows.add(mkrow(sk("6"), sk("7"), sk("8"), sk("9"), sk("0")));
+    rows.add(mkrow(sk("y"), sk("u"), sk("i"), sk("o"), sk("p")));
+    rows.add(mkrow(sk("h"), sk("j"), sk("k"), sk("l")));
+    rows.add(mkrow(sk("v"), sk("b"), sk("n"), sk("m"), sk("backspace")));
+    rows.add(mkrow(sk("space", 6, "enter"), sk("alt"), sk("ctrl")));
     return rows;
   }
 
