@@ -68,6 +68,8 @@ public class Keyboard2View extends View
       [onMeasure] when split. */
   private final ArrayList<TriKey> _split_keys = new ArrayList<TriKey>();
   private final Path _tri_path = new Path();
+  /** One label size shared by all split keys, so letters are consistent. */
+  private float _split_label_size = 0f;
   /** Characters typed while in split mode, echoed in the center area. */
   private final StringBuilder _test_text = new StringBuilder();
   private final Paint _test_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -546,6 +548,9 @@ public class Keyboard2View extends View
     // bottom, esc/tab/fn as swipe modifiers).
     ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_layout_left();
     ArrayList<ArrayList<KeyboardData.Key>> rightRows = split_layout_right();
+    // A single label size for every key, based on the (uniform) band height.
+    int rowCount = Math.max(leftRows.size(), rightRows.size());
+    _split_label_size = (bottom - top) / Math.max(1, rowCount) * 0.20f;
     _tri_border_paint.setStyle(Paint.Style.STROKE);
     _tri_border_paint.setStrokeWidth(
         Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
@@ -603,13 +608,21 @@ public class Keyboard2View extends View
 
   // Swipe-direction slots: 1=NW 2=NE 3=SW 4=SE 5=W 6=E 7=N 8=S.
 
-  /** Build a key with a main value and no swipes. */
+  /** Build a key for [name], reusing the key from the active layout (so its
+      standard swipe sub-keys are preserved) when present, else a bare key. */
   private KeyboardData.Key sk(String name)
   {
-    return KeyboardData.Key.EMPTY.withKeyValue(0, KeyValue.getKeyByName(name));
+    KeyValue kv = KeyValue.getKeyByName(name);
+    if (_keyboard != null)
+    {
+      KeyboardData.Key k = _keyboard.findKeyWithValue(kv);
+      if (k != null)
+        return k;
+    }
+    return KeyboardData.Key.EMPTY.withKeyValue(0, kv);
   }
 
-  /** Build a key with a main value and one swipe modifier. */
+  /** Build a key with an added swipe modifier in direction [dir]. */
   private KeyboardData.Key sk(String name, int dir, String swipe)
   {
     return sk(name).withKeyValue(dir, KeyValue.getKeyByName(swipe));
@@ -710,8 +723,7 @@ public class Keyboard2View extends View
   {
     if (k == null)
       return;
-    float labelSize = Math.min(rx - lx, by1 - by0) * 0.30f;
-    _split_keys.add(new TriKey(k, labelSize, top, bottom, outerX,
+    _split_keys.add(new TriKey(k, _split_label_size, top, bottom, outerX,
           lx, by0, rx, by0, rx, by1, lx, by1));
   }
 
@@ -749,7 +761,7 @@ public class Keyboard2View extends View
       return;
     int nCells = (int)Math.ceil(m / 2.0);
     float cw = (rx0 - lx0) / nCells;
-    float labelSize = Math.min(cw, by1 - by0) * 0.30f;
+    float labelSize = _split_label_size;
     int idx = from;
     for (int c = 0; c < nCells; c++)
     {
