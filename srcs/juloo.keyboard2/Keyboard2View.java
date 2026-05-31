@@ -5,6 +5,7 @@ import android.content.ContextWrapper;
 import android.graphics.Canvas;
 import android.graphics.Insets;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.inputmethodservice.InputMethodService;
@@ -17,6 +18,7 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowMetrics;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -54,24 +56,59 @@ public class Keyboard2View extends View
   private Theme.Computed _tc;
 
   /** Fullscreen landscape split mode (experimental). When active the keyboard
-      fills the window height and is split into a left and right half with a
-      transparent center gap holding a type-test display. */
+      fills the window height and is split into a left and right half whose
+      keys are packed as an interleaved triangle tessellation, with a center
+      type-test display between them. */
   private boolean _split = false;
   /** Fraction of the width reserved for the center gap in split mode. */
-  private static final float SPLIT_CENTER_RATIO = 0.40f;
-  /** Width (px) of the center gap, 0 when not split. */
-  private float _split_gap = 0f;
-  /** Column (in key-width units) at which the gap is inserted. Keys whose
-      start column is >= this are pushed right by [_split_gap]. MAX when not
-      split so the normal (non-split) geometry is unchanged. */
-  private float _split_col = Float.MAX_VALUE;
+  private static final float SPLIT_CENTER_RATIO = 0.60f;
   /** The center rectangle, recomputed in [onMeasure] when split. */
   private final RectF _center_rect = new RectF();
+  /** The triangle (and occasional rectangle) keys of both halves, rebuilt in
+      [onMeasure] when split. */
+  private final ArrayList<TriKey> _split_keys = new ArrayList<TriKey>();
+  private final Path _tri_path = new Path();
   /** Characters typed while in split mode, echoed in the center area. */
   private final StringBuilder _test_text = new StringBuilder();
   private final Paint _test_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
   private final Paint _test_hint_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
   private final Paint _test_bg_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint _tri_border_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+  /** A key occupying a triangle in split mode. [key] may be null for an unused
+      slot. Vertices are absolute view coordinates. */
+  static final class TriKey
+  {
+    final KeyboardData.Key key;
+    final float[] xs;
+    final float[] ys;
+    final float cx; // label anchor (centroid)
+    final float cy;
+    TriKey(KeyboardData.Key k, float x0, float y0, float x1, float y1, float x2, float y2)
+    {
+      key = k;
+      xs = new float[]{ x0, x1, x2 };
+      ys = new float[]{ y0, y1, y2 };
+      cx = (x0 + x1 + x2) / 3f;
+      cy = (y0 + y1 + y2) / 3f;
+    }
+
+    /** Barycentric sign test for point-in-triangle. */
+    boolean contains(float px, float py)
+    {
+      float d1 = sign(px, py, xs[0], ys[0], xs[1], ys[1]);
+      float d2 = sign(px, py, xs[1], ys[1], xs[2], ys[2]);
+      float d3 = sign(px, py, xs[2], ys[2], xs[0], ys[0]);
+      boolean neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+      boolean pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+      return !(neg && pos);
+    }
+
+    private static float sign(float px, float py, float ax, float ay, float bx, float by)
+    {
+      return (px - bx) * (ay - by) - (ax - bx) * (py - by);
+    }
+  }
 
   private static RectF _tmpRect = new RectF();
 
@@ -261,25 +298,26 @@ public class Keyboard2View extends View
 
   private KeyboardData.Key getKeyAtPosition(float tx, float ty)
   {
-    KeyboardData.Row row = getRowAtPosition(ty);
-    if (row == null || tx < _marginLeft)
+    if (_split)
+    {
+      for (TriKey tk : _split_keys)
+        if (tk.key != null && tk.contains(tx, ty))
+          return tk.key;
       return null;
-    // [col] accumulates the column position (in key-width units). In split
-    // mode keys at or past [_split_col] are pushed right by [_split_gap];
-    // outside split mode [_split_col] is MAX so no offset is ever added and
-    // this matches the normal left-to-right layout.
-    float col = 0f;
+    }
+    KeyboardData.Row row = getRowAtPosition(ty);
+    float x = _marginLeft;
+    if (row == null || tx < x)
+      return null;
     for (KeyboardData.Key key : row.keys)
     {
-      col += key.shift;
-      float off = (col >= _split_col) ? _split_gap : 0f;
-      float xLeft = _marginLeft + col * _keyWidth + off;
+      float xLeft = x + key.shift * _keyWidth;
       float xRight = xLeft + key.width * _keyWidth;
       if (tx < xLeft)
         return null;
       if (tx < xRight)
         return key;
-      col += key.width;
+      x = xRight;
     }
     return null;
   }
@@ -298,23 +336,15 @@ public class Keyboard2View extends View
     _marginRight = Math.max(_config.horizontal_margin, _insets_right);
     _marginBottom = _config.margin_bottom + _insets_bottom;
     _split = _config.split_test_mode && _config.orientation_landscape;
+    _keyWidth = (width - _marginLeft - _marginRight) / _keyboard.keysWidth;
     float fill_rows = 0f;
     if (_split)
     {
-      _split_gap = width * SPLIT_CENTER_RATIO;
-      _split_col = _keyboard.keysWidth / 2f;
-      _keyWidth = (width - _marginLeft - _marginRight - _split_gap) / _keyboard.keysWidth;
       // Stretch the rows to fill the whole window height.
       int avail = MeasureSpec.getSize(hSpec);
       if (avail <= 0)
         avail = _config.screenHeightPixels;
       fill_rows = avail - _config.marginTop - _marginBottom;
-    }
-    else
-    {
-      _split_gap = 0f;
-      _split_col = Float.MAX_VALUE;
-      _keyWidth = (width - _marginLeft - _marginRight) / _keyboard.keysWidth;
     }
     _tc = new Theme.Computed(_theme, _config, _keyWidth, _keyboard, fill_rows);
     // Compute the size of labels based on the width or the height of keys. The
@@ -332,12 +362,12 @@ public class Keyboard2View extends View
           + _config.marginTop + _marginBottom);
     if (_split)
     {
-      // Left keys occupy [marginLeft, marginLeft + _split_col*keyWidth]; the
-      // gap follows, then the right keys.
-      _center_rect.left = _marginLeft + _split_col * _keyWidth;
-      _center_rect.right = _center_rect.left + _split_gap;
+      float gap = width * SPLIT_CENTER_RATIO;
+      _center_rect.left = (width - gap) / 2f;
+      _center_rect.right = _center_rect.left + gap;
       _center_rect.top = _tc.margin_top;
       _center_rect.bottom = height - _marginBottom;
+      buildSplitTriangles(width, height);
     }
     setMeasuredDimension(width, height);
   }
@@ -394,20 +424,20 @@ public class Keyboard2View extends View
   protected void onDraw(Canvas canvas)
   {
     if (_split)
+    {
       drawCenterTestArea(canvas);
+      drawSplitTriangles(canvas);
+      return;
+    }
     float y = _tc.margin_top;
     for (KeyboardData.Row row : _keyboard.rows)
     {
       y += row.shift * _tc.row_height;
+      float x = _marginLeft + _tc.margin_left;
       float keyH = row.height * _tc.row_height - _tc.vertical_margin;
-      // [col] mirrors the accumulation in [getKeyAtPosition] so drawing and
-      // hit-testing stay in sync, including the split-mode gap offset.
-      float col = 0f;
       for (KeyboardData.Key k : row.keys)
       {
-        col += k.shift;
-        float off = (col >= _split_col) ? _split_gap : 0f;
-        float x = _marginLeft + _tc.margin_left + col * _keyWidth + off;
+        x += k.shift * _keyWidth;
         float keyW = _keyWidth * k.width - _tc.horizontal_margin;
         boolean isKeyDown = _pointers.isKeyDown(k);
         Theme.Computed.Key tc_key = isKeyDown ? _tc.key_activated : _tc.key;
@@ -420,9 +450,120 @@ public class Keyboard2View extends View
             drawSubLabel(canvas, k.keys[i], x, y, keyW, keyH, i, isKeyDown, tc_key);
         }
         drawIndication(canvas, k, x, y, keyW, keyH, _tc);
-        col += k.width;
+        x += _keyWidth * k.width;
       }
       y += row.height * _tc.row_height;
+    }
+  }
+
+  /** Build the interleaved triangle tessellation for both halves. Called from
+      [onMeasure] in split mode. */
+  private void buildSplitTriangles(int viewW, int viewH)
+  {
+    _split_keys.clear();
+    float top = _tc.margin_top;
+    float bottom = viewH - _marginBottom;
+    // Split the layout's keys into a left and right half by column.
+    ArrayList<KeyboardData.Key> left = new ArrayList<KeyboardData.Key>();
+    ArrayList<KeyboardData.Key> right = new ArrayList<KeyboardData.Key>();
+    float splitCol = _keyboard.keysWidth / 2f;
+    for (KeyboardData.Row row : _keyboard.rows)
+    {
+      float col = 0f;
+      for (KeyboardData.Key k : row.keys)
+      {
+        col += k.shift;
+        if (col + k.width / 2f < splitCol)
+          left.add(k);
+        else
+          right.add(k);
+        col += k.width;
+      }
+    }
+    // Duplicate a space key onto both halves.
+    KeyboardData.Key space =
+      KeyboardData.Key.EMPTY.withKeyValue(0, KeyValue.getKeyByName("space"));
+    left.add(space);
+    right.add(space);
+    _tri_border_paint.setStyle(Paint.Style.STROKE);
+    _tri_border_paint.setStrokeWidth(
+        Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
+    _tri_border_paint.setColor(_theme.colorKeyActivated);
+    tessellateHalf(_marginLeft, top, _center_rect.left, bottom, left);
+    tessellateHalf(_center_rect.right, top, viewW - _marginRight, bottom, right);
+  }
+
+  /** Fill the rectangle [x0,y0,x1,y1] with diagonal-split cells, alternating
+      the diagonal per cell so the triangles interleave, and assign [keys] to
+      the triangle slots in order. Outer edges stay straight. */
+  private void tessellateHalf(float x0, float y0, float x1, float y1,
+      ArrayList<KeyboardData.Key> keys)
+  {
+    int K = keys.size();
+    if (K <= 0 || x1 <= x0 || y1 <= y0)
+      return;
+    float W = x1 - x0;
+    float H = y1 - y0;
+    // Aim for ~K/2 near-square cells, using the tall aspect ratio so cells
+    // stack vertically (few columns, many rows) instead of becoming slivers.
+    int cells = (int)Math.ceil(K / 2.0);
+    int nCols = Math.max(1, Math.round((float)Math.sqrt(cells * W / H)));
+    int nRows = (int)Math.ceil((double)cells / nCols);
+    while (2 * nCols * nRows < K)
+      nRows++;
+    float cw = W / nCols;
+    float ch = H / nRows;
+    int idx = 0;
+    for (int r = 0; r < nRows; r++)
+    {
+      for (int c = 0; c < nCols; c++)
+      {
+        float lx = x0 + c * cw, ty = y0 + r * ch;
+        float rx = lx + cw, by = ty + ch;
+        KeyboardData.Key kA = idx < K ? keys.get(idx) : null; idx++;
+        KeyboardData.Key kB = idx < K ? keys.get(idx) : null; idx++;
+        if (((r + c) & 1) == 0)
+        {
+          // Diagonal top-left to bottom-right.
+          _split_keys.add(new TriKey(kA, lx, ty, rx, ty, rx, by));
+          _split_keys.add(new TriKey(kB, lx, ty, rx, by, lx, by));
+        }
+        else
+        {
+          // Diagonal top-right to bottom-left.
+          _split_keys.add(new TriKey(kA, lx, ty, rx, ty, lx, by));
+          _split_keys.add(new TriKey(kB, rx, ty, rx, by, lx, by));
+        }
+      }
+    }
+  }
+
+  /** Draw the triangle keys of both halves. */
+  private void drawSplitTriangles(Canvas canvas)
+  {
+    for (TriKey tk : _split_keys)
+    {
+      boolean down = tk.key != null && _pointers.isKeyDown(tk.key);
+      Theme.Computed.Key tc_key = down ? _tc.key_activated : _tc.key;
+      _tri_path.reset();
+      _tri_path.moveTo(tk.xs[0], tk.ys[0]);
+      _tri_path.lineTo(tk.xs[1], tk.ys[1]);
+      _tri_path.lineTo(tk.xs[2], tk.ys[2]);
+      _tri_path.close();
+      canvas.drawPath(_tri_path, tc_key.bg_paint);
+      canvas.drawPath(_tri_path, _tri_border_paint);
+      if (tk.key != null && tk.key.keys[0] != null)
+      {
+        KeyValue kv = modifyKey(tk.key.keys[0], _mods);
+        if (kv != null)
+        {
+          Paint p = tc_key.label_paint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
+              labelColor(kv, down, false), _mainLabelSize);
+          p.setTextAlign(Paint.Align.CENTER);
+          canvas.drawText(kv.getString(), tk.cx,
+              tk.cy - (p.ascent() + p.descent()) / 2f, p);
+        }
+      }
     }
   }
 
@@ -477,8 +618,13 @@ public class Keyboard2View extends View
         _test_text.append(k.getString());
         break;
       case Editing:
-        if (k.getEditing() == KeyValue.Editing.BACKSPACE && _test_text.length() > 0)
-          _test_text.deleteCharAt(_test_text.length() - 1);
+        if (k.getEditing() == KeyValue.Editing.BACKSPACE)
+        {
+          if (_test_text.length() > 0)
+            _test_text.deleteCharAt(_test_text.length() - 1);
+        }
+        else if (k.getEditing() == KeyValue.Editing.SPACE_BAR)
+          _test_text.append(' ');
         break;
       default:
         break;
