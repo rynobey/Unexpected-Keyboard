@@ -62,9 +62,6 @@ public class Keyboard2View extends View
   private boolean _split = false;
   /** Fraction of the width reserved for the center gap in split mode. */
   private static final float SPLIT_CENTER_RATIO = 0.60f;
-  /** Rows with at most this many keys are laid out as rectangles instead of
-      interleaved triangles. */
-  private static final int SPLIT_RECT_MAX = 4;
   /** The center rectangle, recomputed in [onMeasure] when split. */
   private final RectF _center_rect = new RectF();
   /** The triangle (and occasional rectangle) keys of both halves, rebuilt in
@@ -649,7 +646,7 @@ public class Keyboard2View extends View
       return;
     float W = x1 - x0;
     float bandH = (y1 - y0) / R;
-    boolean right_half = outerX > 0f;
+    boolean left_half = outerX <= 0f;
     for (int ri = 0; ri < R; ri++)
     {
       ArrayList<KeyboardData.Key> keys = rows.get(ri);
@@ -658,69 +655,96 @@ public class Keyboard2View extends View
         continue;
       float by0 = y0 + ri * bandH;
       float by1 = by0 + bandH;
-      if (n <= SPLIT_RECT_MAX)
+      if (n >= 5)
       {
-        // Sparse row: one rectangle per key, left to right.
-        float rw = W / n;
-        float labelSize = Math.min(rw, bandH) * 0.30f;
-        for (int k = 0; k < n; k++)
+        // The outermost key is a rectangle of 1/4 the half width; the rest
+        // are interleaved triangles in the remaining width.
+        float rectW = W * 0.25f;
+        if (left_half)
         {
-          float lx = x0 + k * rw, rx = lx + rw;
-          _split_keys.add(new TriKey(keys.get(k), labelSize, y0, y1, outerX,
-                lx, by0, rx, by0, rx, by1, lx, by1));
-        }
-        continue;
-      }
-      int nCells = (int)Math.ceil(n / 2.0);
-      float cw = W / nCells;
-      float labelSize = Math.min(cw, bandH) * 0.30f;
-      int idx = 0;
-      for (int c = 0; c < nCells; c++)
-      {
-        float lx = x0 + c * cw, rx = lx + cw;
-        boolean first = (c == 0), last = (c == nCells - 1);
-        // The four screen corners: the corner key is the triangle whose
-        // slanted edge faces the corner, leaving the corner itself as a
-        // bevel (the opposite triangle is dropped).
-        int corner = -1; // 0=TL 1=TR 2=BL 3=BR
-        if (ri == 0 && !right_half && first) corner = 0;
-        else if (ri == 0 && right_half && last) corner = 1;
-        else if (ri == R - 1 && !right_half && first) corner = 2;
-        else if (ri == R - 1 && right_half && last) corner = 3;
-        if (corner >= 0)
-        {
-          KeyboardData.Key k = idx < n ? keys.get(idx) : null; idx++;
-          switch (corner)
-          {
-            case 0: // top-left: keep lower-right triangle "/q|"
-              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, rx, by0, rx, by1, lx, by1));
-              break;
-            case 1: // top-right: keep lower-left triangle "|p\"
-              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, lx, by0, rx, by1, lx, by1));
-              break;
-            case 2: // bottom-left: keep upper-right triangle
-              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, lx, by0, rx, by0, rx, by1));
-              break;
-            default: // bottom-right: keep upper-left triangle
-              _split_keys.add(new TriKey(k, labelSize, y0, y1, outerX, lx, by0, rx, by0, lx, by1));
-              break;
-          }
-          continue;
-        }
-        KeyboardData.Key kL = idx < n ? keys.get(idx) : null; idx++;
-        KeyboardData.Key kR = idx < n ? keys.get(idx) : null; idx++;
-        if ((c & 1) == 0)
-        {
-          // Diagonal top-left to bottom-right: left triangle then right.
-          _split_keys.add(new TriKey(kL, labelSize, y0, y1, outerX, lx, by0, rx, by1, lx, by1));
-          _split_keys.add(new TriKey(kR, labelSize, y0, y1, outerX, lx, by0, rx, by0, rx, by1));
+          add_split_rect(keys.get(0), x0, by0, x0 + rectW, by1, y0, y1, outerX);
+          tess_triangles(keys, 1, n, x0 + rectW, by0, x1, by1, y0, y1, outerX, true);
         }
         else
         {
-          // Diagonal top-right to bottom-left: left triangle then right.
-          _split_keys.add(new TriKey(kL, labelSize, y0, y1, outerX, lx, by0, rx, by0, lx, by1));
-          _split_keys.add(new TriKey(kR, labelSize, y0, y1, outerX, rx, by0, rx, by1, lx, by1));
+          add_split_rect(keys.get(n - 1), x1 - rectW, by0, x1, by1, y0, y1, outerX);
+          tess_triangles(keys, 0, n - 1, x0, by0, x1 - rectW, by1, y0, y1, outerX, false);
         }
+      }
+      else
+      {
+        // Sparse row: one (width-weighted) rectangle per key, left to right.
+        add_rect_row(keys, x0, by0, x1, by1, y0, y1, outerX);
+      }
+    }
+  }
+
+  private void add_split_rect(KeyboardData.Key k, float lx, float by0,
+      float rx, float by1, float top, float bottom, float outerX)
+  {
+    if (k == null)
+      return;
+    float labelSize = Math.min(rx - lx, by1 - by0) * 0.30f;
+    _split_keys.add(new TriKey(k, labelSize, top, bottom, outerX,
+          lx, by0, rx, by0, rx, by1, lx, by1));
+  }
+
+  /** Lay [keys] left to right as rectangles, with the space bar given extra
+      width. */
+  private void add_rect_row(ArrayList<KeyboardData.Key> keys, float x0,
+      float by0, float x1, float by1, float top, float bottom, float outerX)
+  {
+    int n = keys.size();
+    float total = 0f;
+    float[] w = new float[n];
+    for (int i = 0; i < n; i++)
+    {
+      w[i] = is_space(keys.get(i)) ? 2.5f : 1f;
+      total += w[i];
+    }
+    float cx = x0;
+    for (int i = 0; i < n; i++)
+    {
+      float ww = (x1 - x0) * w[i] / total;
+      add_split_rect(keys.get(i), cx, by0, cx + ww, by1, top, bottom, outerX);
+      cx += ww;
+    }
+  }
+
+  /** Tessellate keys [from,to) into the rectangle as triangle pairs. All
+      hypotenuses lean the same way per half: "/" on the left, "\" on the
+      right. Empty slots are skipped (not drawn). */
+  private void tess_triangles(ArrayList<KeyboardData.Key> keys, int from,
+      int to, float lx0, float by0, float rx0, float by1, float top,
+      float bottom, float outerX, boolean left_half)
+  {
+    int m = to - from;
+    if (m <= 0 || rx0 <= lx0)
+      return;
+    int nCells = (int)Math.ceil(m / 2.0);
+    float cw = (rx0 - lx0) / nCells;
+    float labelSize = Math.min(cw, by1 - by0) * 0.30f;
+    int idx = from;
+    for (int c = 0; c < nCells; c++)
+    {
+      float lx = lx0 + c * cw, rx = lx + cw;
+      KeyboardData.Key kA = idx < to ? keys.get(idx) : null; idx++;
+      KeyboardData.Key kB = idx < to ? keys.get(idx) : null; idx++;
+      if (left_half)
+      {
+        // "/" diagonal: upper-left then lower-right.
+        if (kA != null)
+          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx, by0, rx, by0, lx, by1));
+        if (kB != null)
+          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, rx, by0, rx, by1, lx, by1));
+      }
+      else
+      {
+        // "\" diagonal: upper-right then lower-left.
+        if (kA != null)
+          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx, by0, rx, by0, rx, by1));
+        if (kB != null)
+          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, lx, by0, rx, by1, lx, by1));
       }
     }
   }
@@ -730,7 +754,9 @@ public class Keyboard2View extends View
   {
     for (TriKey tk : _split_keys)
     {
-      boolean down = tk.key != null && _pointers.isKeyDown(tk.key);
+      if (tk.key == null) // don't render empty slots
+        continue;
+      boolean down = _pointers.isKeyDown(tk.key);
       Theme.Computed.Key tc_key = down ? _tc.key_activated : _tc.key;
       _tri_path.reset();
       _tri_path.moveTo(tk.xs[0], tk.ys[0]);
@@ -739,8 +765,6 @@ public class Keyboard2View extends View
       _tri_path.close();
       canvas.drawPath(_tri_path, tc_key.bg_paint);
       canvas.drawPath(_tri_path, _tri_border_paint);
-      if (tk.key == null)
-        continue;
       if (tk.key.keys[0] != null)
       {
         KeyValue kv = modifyKey(tk.key.keys[0], _mods);
