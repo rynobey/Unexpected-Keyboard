@@ -609,14 +609,16 @@ public class Keyboard2View extends View
   // Swipe-direction slots: 1=NW 2=NE 3=SW 4=SE 5=W 6=E 7=N 8=S.
 
   /** Build a key for [name], reusing the key from the active layout (so its
-      standard swipe sub-keys are preserved) when present, else a bare key. */
+      standard swipe sub-keys are preserved) only when [name] is that key's
+      center value. Otherwise (e.g. a digit that only exists as a swipe on a
+      letter) build a bare key so it shows as itself. */
   private KeyboardData.Key sk(String name)
   {
     KeyValue kv = KeyValue.getKeyByName(name);
     if (_keyboard != null)
     {
       KeyboardData.Key k = _keyboard.findKeyWithValue(kv);
-      if (k != null)
+      if (k != null && k.keys[0] != null && k.keys[0].sameKey(kv))
         return k;
     }
     return KeyboardData.Key.EMPTY.withKeyValue(0, kv);
