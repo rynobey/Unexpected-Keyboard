@@ -539,8 +539,8 @@ public class Keyboard2View extends View
   private void buildSplitTriangles(int viewW, int viewH)
   {
     _split_keys.clear();
-    float top = _tc.margin_top;
-    // Fill all the way to the bottom edge of the screen.
+    // Fill all the way to the top and bottom edges of the screen.
+    float top = 0f;
     float bottom = viewH;
     // Group each half's keys by row so the triangle layout roughly follows the
     // standard QWERTY arrangement (one band per row, top to bottom).
@@ -561,6 +561,8 @@ public class Keyboard2View extends View
     float cr = corner_radius_px();
     if (cr > 0f)
     {
+      chamfer_corner(0f, top, cr);
+      chamfer_corner(viewW, top, cr);
       chamfer_corner(0f, bottom, cr);
       chamfer_corner(viewW, bottom, cr);
     }
@@ -660,15 +662,19 @@ public class Keyboard2View extends View
         KeyboardData.Key kL = idx < n ? keys.get(idx) : null; idx++;
         KeyboardData.Key kR = idx < n ? keys.get(idx) : null; idx++;
         boolean odd = (c & 1) == 1;
-        // On the bottom band, force the outer-corner cell's diagonal so the
-        // screen-corner key is a clean right triangle (both its corner edges
-        // run along screen edges), ready to be chamfered for rounded corners.
-        boolean bottom_band = (ri == R - 1);
+        // At each screen corner, force the corner cell's diagonal so the
+        // corner key is a clean right triangle (both its corner edges run
+        // along screen edges), ready to be chamfered for rounded corners.
         boolean right_half = outerX > 0f;
-        if (bottom_band && right_half && c == nCells - 1)
-          odd = true;
-        else if (bottom_band && !right_half && c == 0)
-          odd = false;
+        boolean first = (c == 0), last = (c == nCells - 1);
+        if (ri == 0 && !right_half && first)
+          odd = true;          // top-left
+        else if (ri == 0 && right_half && last)
+          odd = false;         // top-right
+        else if (ri == R - 1 && !right_half && first)
+          odd = false;         // bottom-left
+        else if (ri == R - 1 && right_half && last)
+          odd = true;          // bottom-right
         if (!odd)
         {
           // Diagonal top-left to bottom-right: left triangle then right.
