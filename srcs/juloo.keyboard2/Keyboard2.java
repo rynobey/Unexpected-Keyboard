@@ -360,6 +360,11 @@ public class Keyboard2 extends InputMethodService
       between the IME and the app behind. */
   private Drawable _saved_window_bg = null;
   private boolean _saved_window_bg_valid = false;
+  /** Set true once we've called window.setFormat(PixelFormat.TRANSLUCENT) so
+      restoreTransparencyAfterSplit knows whether it needs to revert. Avoids
+      calling setFormat(OPAQUE) on a window we never touched — which breaks
+      non-split sessions (X canvas behind goes black on Pixel 10). */
+  private boolean _format_set_to_translucent = false;
   private final java.util.IdentityHashMap<View, Drawable> _saved_chain_bgs =
       new java.util.IdentityHashMap<>();
 
@@ -414,6 +419,7 @@ public class Keyboard2 extends InputMethodService
     }
     window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
     window.setFormat(PixelFormat.TRANSLUCENT);
+    _format_set_to_translucent = true;
 
     if (_keyboard_container_view == null) return;
     final View decor = window.getDecorView();
@@ -439,9 +445,14 @@ public class Keyboard2 extends InputMethodService
       _saved_window_bg = null;
       _saved_window_bg_valid = false;
     }
-    // Restore the default opaque buffer format so non-split sessions
-    // don't pay the alpha-blending cost.
-    window.setFormat(PixelFormat.OPAQUE);
+    // Only restore OPAQUE if we previously forced TRANSLUCENT. Calling
+    // setFormat(OPAQUE) on an untouched IME window changes its surface
+    // backing in a way that breaks the app behind on Pixel 10 / Android 16
+    // (X canvas turns black for non-split portrait sessions).
+    if (_format_set_to_translucent) {
+      window.setFormat(PixelFormat.OPAQUE);
+      _format_set_to_translucent = false;
+    }
     if (!_saved_chain_bgs.isEmpty()) {
       for (java.util.Map.Entry<View, Drawable> e : _saved_chain_bgs.entrySet()) {
         e.getKey().setBackground(e.getValue());
