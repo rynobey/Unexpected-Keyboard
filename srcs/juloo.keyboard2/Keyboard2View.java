@@ -473,10 +473,16 @@ public class Keyboard2View extends View
       _center_rect.bottom = _split_bottom;
       buildSplitTriangles(width, height);
       // Notify the service so it can broadcast the hole rect to a
-      // compatible app. The view's context is the IME service for views
-      // attached to an InputMethodService window.
-      if (getContext() instanceof Keyboard2)
-        ((Keyboard2)getContext()).onSplitRectChanged(_center_rect, this);
+      // compatible app. Walk the ContextWrapper chain — when this view is
+      // inflated via LayoutInflater (especially with AppCompat themes),
+      // getContext() returns a ContextThemeWrapper around the IME service,
+      // not the IME itself, so a bare `instanceof` cast fails silently and
+      // no active=true broadcast ever fires.
+      android.content.Context ctx = getContext();
+      while (ctx instanceof android.content.ContextWrapper && !(ctx instanceof Keyboard2))
+        ctx = ((android.content.ContextWrapper) ctx).getBaseContext();
+      if (ctx instanceof Keyboard2)
+        ((Keyboard2) ctx).onSplitRectChanged(_center_rect, this);
     }
     setMeasuredDimension(width, height);
   }
