@@ -644,10 +644,10 @@ public class Keyboard2View extends View
     return k;
   }
 
-  /** A number key with its shift-symbol on the down swipe. */
-  private KeyboardData.Key numkey(String digit, char symbol)
+  /** A number key with its shift-symbol on a corner swipe [dir]. */
+  private KeyboardData.Key numkey(String digit, char symbol, int dir)
   {
-    return sk(digit).withKeyValue(8, KeyValue.makeCharKey(symbol));
+    return sk(digit).withKeyValue(dir, KeyValue.makeCharKey(symbol));
   }
 
   /** Build a key with an added swipe modifier in direction [dir]. */
@@ -680,13 +680,14 @@ public class Keyboard2View extends View
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
+    // Symbols on sw (bottom-left, the outer corner); esc on se.
     rows.add(mkrow(
-          numkey("1", '!').withKeyValue(6, KeyValue.getKeyByName("esc")),
-          numkey("2", '@'), numkey("3", '#'), numkey("4", '$'), numkey("5", '%')));
-    rows.add(mkrow(sk("q", 6, "tab"), sk("w"), sk("e"), sk("r"), sk("t")));
+          numkey("1", '!', 3).withKeyValue(4, KeyValue.getKeyByName("esc")),
+          numkey("2", '@', 3), numkey("3", '#', 3), numkey("4", '$', 3), numkey("5", '%', 3)));
+    rows.add(mkrow(sk("q", 2, "tab"), sk("w"), sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
     rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c"), sk("v")));
-    rows.add(mkrow(sk("ctrl", 6, "fn"), sk("alt"), sk("space", 6, "enter")));
+    rows.add(mkrow(sk("ctrl", 2, "fn"), sk("alt"), sk("space", 2, "enter")));
     return rows;
   }
 
@@ -695,9 +696,10 @@ public class Keyboard2View extends View
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
+    // Symbols on se (bottom-right, the outer corner of the right half).
     rows.add(mkrow(
-          numkey("6", '^'), numkey("7", '&'), numkey("8", '*'),
-          numkey("9", '('), numkey("0", ')')));
+          numkey("6", '^', 4), numkey("7", '&', 4), numkey("8", '*', 4),
+          numkey("9", '(', 4), numkey("0", ')', 4)));
     rows.add(mkrow(sk("y"), sk("u"), sk("i"), sk("o"), sk("p")));
     rows.add(mkrow(sk("h"), sk("j"), sk("k"), sk("l")));
     rows.add(mkrow(sk("b"), sk("n"), sk("m"), sk("backspace")));
