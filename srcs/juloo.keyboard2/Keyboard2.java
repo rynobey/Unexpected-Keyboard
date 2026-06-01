@@ -3,7 +3,10 @@ package juloo.keyboard2;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build.VERSION;
@@ -188,10 +191,80 @@ public class Keyboard2 extends InputMethodService
     _config.emoji_dictionary = Dictionaries.find_by_name(dicts, "emoji");
   }
 
-  /** Experimental fullscreen landscape split mode is active. */
+  /** Experimental fullscreen landscape split mode is active.
+      Now reads the per-session decision (computed in onStartInputView). */
   private boolean split_active()
   {
-    return _config != null && _config.split_test_mode && _config.orientation_landscape;
+    return _config != null && _config.session_split && _config.orientation_landscape;
+  }
+
+  /** Decide whether THIS input session should use split mode. Driven by
+      the split_mode preference, hardware-keyboard presence, and the
+      focused app's manifest meta-data when in "auto". */
+  private boolean shouldUseSplitForSession(EditorInfo info)
+  {
+    if (_config == null) return false;
+    // Hardware keyboard present? Skip split mode — the on-screen keyboard
+    // shouldn't claim the full screen when typing on hardware. System
+    // usually auto-hides the IME in this case; if it doesn't, fall back
+    // to a normal compact landscape keyboard.
+    Configuration cfg = getResources().getConfiguration();
+    if (cfg.keyboard == Configuration.KEYBOARD_QWERTY
+        && cfg.hardKeyboardHidden != Configuration.HARDKEYBOARDHIDDEN_YES)
+      return false;
+    String mode = _config.split_mode;
+    if ("off".equals(mode))    return false;
+    if ("always".equals(mode)) return true;
+    // "auto" — check whether the focused app declares hole-layout support
+    // via manifest meta-data. No central allow-list: apps opt in themselves.
+    if (info == null || info.packageName == null) return false;
+    return appDeclaresHoleSupport(info.packageName);
+  }
+
+  /** True if the named app's manifest has
+      <meta-data android:name="…SUPPORTS_HOLE_LAYOUT" android:value="true"/>
+      on its <application> tag. Fails closed on any lookup error. */
+  private boolean appDeclaresHoleSupport(String packageName)
+  {
+    try {
+      ApplicationInfo ai = getPackageManager()
+          .getApplicationInfo(packageName, PackageManager.GET_META_DATA);
+      return ai.metaData != null
+          && ai.metaData.getBoolean(Config.META_SUPPORTS_HOLE_LAYOUT, false);
+    } catch (PackageManager.NameNotFoundException e) {
+      return false;
+    }
+  }
+
+  /** The package we'll send hole-layout broadcasts to for the current
+      input session — null when no compatible app is focused. */
+  private String _holeReceiverPkg = null;
+
+  /** Unicast broadcast the current hole rectangle (or "clear") to the
+      compatible app. Coordinates are converted view-local → screen px. */
+  private void broadcastHoleLayout(boolean active, RectF rectInView, View view)
+  {
+    if (_holeReceiverPkg == null) return;
+    Intent i = new Intent(Config.ACTION_HOLE_LAYOUT);
+    i.setPackage(_holeReceiverPkg);   // unicast — only this app gets it
+    i.putExtra("protocol_version", 1);
+    i.putExtra("active", active);
+    if (active && rectInView != null && view != null) {
+      int[] origin = new int[2];
+      view.getLocationOnScreen(origin);
+      i.putExtra("rect_left",   (int)(rectInView.left   + origin[0]));
+      i.putExtra("rect_top",    (int)(rectInView.top    + origin[1]));
+      i.putExtra("rect_right",  (int)(rectInView.right  + origin[0]));
+      i.putExtra("rect_bottom", (int)(rectInView.bottom + origin[1]));
+    }
+    sendBroadcast(i);
+  }
+
+  /** Called by Keyboard2View after each onMeasure in split mode. */
+  public void onSplitRectChanged(RectF centerRectInView, View view)
+  {
+    if (_holeReceiverPkg != null)
+      broadcastHoleLayout(true, centerRectInView, view);
   }
 
   private void refresh_candidates_view()
@@ -245,6 +318,10 @@ public class Keyboard2 extends InputMethodService
   public void onStartInputView(EditorInfo info, boolean restarting)
   {
     _config.editor_config.refresh(info, getResources());
+    // Lock the per-session split decision BEFORE refresh_config() —
+    // split_active() now reads _config.session_split.
+    _config.session_split = shouldUseSplitForSession(info);
+    _holeReceiverPkg = (_config.session_split && info != null) ? info.packageName : null;
     refresh_config();
     _currentSpecialLayout = refresh_special_layout();
     _keyboard_layout_view.setKeyboard(current_layout());
@@ -351,6 +428,10 @@ public class Keyboard2 extends InputMethodService
   public void onFinishInputView(boolean finishingInput)
   {
     super.onFinishInputView(finishingInput);
+    if (_holeReceiverPkg != null) {
+      broadcastHoleLayout(false, null, null);
+      _holeReceiverPkg = null;
+    }
     _keyboard_layout_view.reset();
   }
 

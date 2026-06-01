@@ -75,13 +75,35 @@ public final class Config
   public boolean clipboard_history_enabled;
   public int clipboard_history_duration;
   public boolean space_bar_auto_complete;
-  /** Experimental: in landscape, render the keyboard fullscreen split into a
-      left and right half with a type-test area in the center. */
-  public boolean split_test_mode;
+  /** Experimental split mode policy. Values: "auto" (only in apps that
+      declare hole-layout support via manifest meta-data), "always" (in any
+      landscape app), "off". */
+  public String split_mode;
+  /** Width of the transparent center hole as a fraction of screen width
+      when in split mode. Loaded from a 30..80 percent SeekBar preference,
+      exposed here as a 0.30..0.80 float. */
+  public float split_center_ratio;
+
+  /** Manifest meta-data key. Compatible apps opt in by declaring this on
+      their <application> tag:
+        <meta-data android:name="com.rynobey.uxk.SUPPORTS_HOLE_LAYOUT"
+                   android:value="true" />
+      The IME reads it on each onStartInputView to decide split mode. */
+  public static final String META_SUPPORTS_HOLE_LAYOUT =
+      "com.rynobey.uxk.SUPPORTS_HOLE_LAYOUT";
+
+  /** Broadcast sent to a compatible app when entering/leaving split mode,
+      carrying the hole rect in screen pixels. Unicast via setPackage(). */
+  public static final String ACTION_HOLE_LAYOUT =
+      "com.rynobey.uxk.HOLE_LAYOUT_CHANGED";
 
   // Dynamically set
   /** Configuration options implied by the connected editor. */
   public EditorConfig editor_config;
+  /** Whether the current input session is in split mode. Computed per
+      onStartInputView from split_mode + focused-app meta-data. Read by
+      Keyboard2View on each measure. */
+  public boolean session_split = false;
   public boolean shouldOfferVoiceTyping;
   public ExtraKeys extra_keys_subtype;
   public Map<KeyValue, KeyboardData.PreferredPos> extra_keys_param;
@@ -198,7 +220,8 @@ public final class Config
     clipboard_history_enabled = _prefs.getBoolean("clipboard_history_enabled", false);
     clipboard_history_duration = Integer.parseInt(_prefs.getString("clipboard_history_duration", "5"));
     space_bar_auto_complete = _prefs.getBoolean("space_bar_auto_complete", false);
-    split_test_mode = _prefs.getBoolean("split_test_mode", false);
+    split_mode = _prefs.getString("split_mode", "auto");
+    split_center_ratio = _prefs.getInt("split_center_ratio", 60) / 100f;
 
     float screen_width_dp = dm.widthPixels / dm.density;
     wide_screen = screen_width_dp >= WIDE_DEVICE_THRESHOLD;

@@ -61,9 +61,8 @@ public class Keyboard2View extends View
       keys are packed as an interleaved triangle tessellation, with a center
       type-test display between them. */
   private boolean _split = false;
-  /** Fraction of the width reserved for the center gap in split mode. */
-  private static final float SPLIT_CENTER_RATIO = 0.60f;
-  /** The center rectangle, recomputed in [onMeasure] when split. */
+  /** The center rectangle, recomputed in [onMeasure] when split.
+      Width is driven by _config.split_center_ratio (user-tunable). */
   private final RectF _center_rect = new RectF();
   /** Top/bottom of the key area in split mode (leaves a blank strip above and
       below, the bottom one giving room for the system hide/globe controls). */
@@ -433,7 +432,7 @@ public class Keyboard2View extends View
     _marginLeft = Math.max(_config.horizontal_margin, _insets_left);
     _marginRight = Math.max(_config.horizontal_margin, _insets_right);
     _marginBottom = _config.margin_bottom + _insets_bottom;
-    _split = _config.split_test_mode && _config.orientation_landscape;
+    _split = _config.session_split && _config.orientation_landscape;
     _keyWidth = (width - _marginLeft - _marginRight) / _keyboard.keysWidth;
     float fill_rows = 0f;
     if (_split)
@@ -463,12 +462,17 @@ public class Keyboard2View extends View
       float density = getContext().getResources().getDisplayMetrics().density;
       _split_top = density * 22f;             // small blank strip above
       _split_bottom = height - density * 36f; // blank strip below for controls
-      float gap = width * SPLIT_CENTER_RATIO;
+      float gap = width * _config.split_center_ratio;
       _center_rect.left = (width - gap) / 2f;
       _center_rect.right = _center_rect.left + gap;
       _center_rect.top = _split_top;
       _center_rect.bottom = _split_bottom;
       buildSplitTriangles(width, height);
+      // Notify the service so it can broadcast the hole rect to a
+      // compatible app. The view's context is the IME service for views
+      // attached to an InputMethodService window.
+      if (getContext() instanceof Keyboard2)
+        ((Keyboard2)getContext()).onSplitRectChanged(_center_rect, this);
     }
     setMeasuredDimension(width, height);
   }

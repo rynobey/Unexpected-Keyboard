@@ -48,8 +48,13 @@
     <string name="pref_lock_double_tap_summary">You can lock any modifier by holding it</string>
     <string name="pref_category_behavior">Behavior</string>
     <string name="pref_category_experimental">Experimental</string>
-    <string name="pref_split_test_mode_title">Fullscreen split test mode</string>
-    <string name="pref_split_test_mode_summary">In landscape, fill the screen with a left/right split keyboard and a center type-test area</string>
+    <string name="pref_split_mode_title">Fullscreen split mode</string>
+    <string name="pref_split_mode_summary">In landscape, fill the screen with a left/right split keyboard and a transparent center hole. Auto only enables it for compatible apps.</string>
+    <string name="pref_split_mode_auto">Auto (only in compatible apps)</string>
+    <string name="pref_split_mode_always">Always (any landscape app)</string>
+    <string name="pref_split_mode_off">Off</string>
+    <string name="pref_split_center_ratio_title">Split mode hole width (%)</string>
+    <string name="pref_split_center_ratio_summary">Percentage of screen width reserved for the transparent center area</string>
     <string name="pref_autocapitalisation_title">Automatic capitalisation</string>
     <string name="pref_autocapitalisation_summary">Press Shift at the beginning of a sentence</string>
     <string name="pref_change_method_key_replacement_title">Switching between input methods</string>
