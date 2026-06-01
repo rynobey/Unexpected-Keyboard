@@ -680,11 +680,13 @@ public class Keyboard2View extends View
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
-    // Symbols on sw (bottom-left, the outer corner); esc on se.
+    // Symbols on se (lower-inner corner); esc moves down to q.
     rows.add(mkrow(
-          numkey("1", '!', 3).withKeyValue(4, KeyValue.getKeyByName("esc")),
-          numkey("2", '@', 3), numkey("3", '#', 3), numkey("4", '$', 3), numkey("5", '%', 3)));
-    rows.add(mkrow(sk("q", 2, "tab"), sk("w"), sk("e"), sk("r"), sk("t")));
+          numkey("1", '!', 4), numkey("2", '@', 4), numkey("3", '#', 4),
+          numkey("4", '$', 4), numkey("5", '%', 4)));
+    rows.add(mkrow(
+          sk("q", 2, "tab").withKeyValue(4, KeyValue.getKeyByName("esc")),
+          sk("w"), sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
     rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c"), sk("v")));
     rows.add(mkrow(sk("ctrl", 2, "fn"), sk("alt"), sk("space", 2, "enter")));
@@ -696,10 +698,10 @@ public class Keyboard2View extends View
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
-    // Symbols on se (bottom-right, the outer corner of the right half).
+    // Symbols on sw (lower-inner corner of the right half).
     rows.add(mkrow(
-          numkey("6", '^', 4), numkey("7", '&', 4), numkey("8", '*', 4),
-          numkey("9", '(', 4), numkey("0", ')', 4)));
+          numkey("6", '^', 3), numkey("7", '&', 3), numkey("8", '*', 3),
+          numkey("9", '(', 3), numkey("0", ')', 3)));
     rows.add(mkrow(sk("y"), sk("u"), sk("i"), sk("o"), sk("p")));
     rows.add(mkrow(sk("h"), sk("j"), sk("k"), sk("l")));
     rows.add(mkrow(sk("b"), sk("n"), sk("m"), sk("backspace")));
@@ -728,35 +730,57 @@ public class Keyboard2View extends View
         continue;
       float by0 = y0 + ri * bandH;
       float by1 = by0 + bandH;
-      if (n >= 5)
+      boolean top_edge = (ri == 0);
+      boolean bot_edge = (ri == R - 1);
+      // The number row (top) is rendered as rectangles so corner symbols are
+      // always visible; other 5+ key rows get a 1/4-width outer rectangle and
+      // interleaved triangles.
+      if (n >= 5 && !top_edge)
       {
-        // The outermost key is a rectangle of 1/4 the half width; the rest
-        // are interleaved triangles in the remaining width.
         float rectW = W * 0.25f;
         if (left_half)
         {
-          add_split_rect(keys.get(0), x0, by0, x0 + rectW, by1, y0, y1, outerX);
-          tess_triangles(keys, 1, n, x0 + rectW, by0, x1, by1, y0, y1, outerX, true);
+          add_split_rect(keys.get(0), x0, by0, x0 + rectW, by1, y0, y1, outerX, true, false, top_edge, bot_edge);
+          tess_triangles(keys, 1, n, x0 + rectW, by0, x1, by1, y0, y1, outerX, true, top_edge, bot_edge);
         }
         else
         {
-          add_split_rect(keys.get(n - 1), x1 - rectW, by0, x1, by1, y0, y1, outerX);
-          tess_triangles(keys, 0, n - 1, x0, by0, x1 - rectW, by1, y0, y1, outerX, false);
+          add_split_rect(keys.get(n - 1), x1 - rectW, by0, x1, by1, y0, y1, outerX, false, true, top_edge, bot_edge);
+          tess_triangles(keys, 0, n - 1, x0, by0, x1 - rectW, by1, y0, y1, outerX, false, top_edge, bot_edge);
         }
       }
       else
       {
-        // Sparse row: one (width-weighted) rectangle per key, left to right.
-        add_rect_row(keys, x0, by0, x1, by1, y0, y1, outerX);
+        add_rect_row(keys, x0, by0, x1, by1, y0, y1, outerX, left_half, top_edge, bot_edge);
       }
     }
   }
 
+  /** Remove swipe sub-keys that point toward a physical screen edge the key
+      sits against (hard to reach). [L/R/T/B] = adjacent to left/right/top/
+      bottom edge. */
+  private KeyboardData.Key strip_outward(KeyboardData.Key k, boolean L,
+      boolean R, boolean T, boolean B)
+  {
+    boolean[] drop = new boolean[9]; // 1nw 2ne 3sw 4se 5w 6e 7n 8s
+    if (L) { drop[1] = drop[3] = drop[5] = true; }
+    if (R) { drop[2] = drop[4] = drop[6] = true; }
+    if (T) { drop[1] = drop[2] = drop[7] = true; }
+    // Bottom edge intentionally not stripped: the arrows key needs its down
+    // swipe, and the bottom row is reachable enough.
+    for (int i = 1; i < 9; i++)
+      if (drop[i] && k.keys[i] != null)
+        k = k.withKeyValue(i, null);
+    return k;
+  }
+
   private void add_split_rect(KeyboardData.Key k, float lx, float by0,
-      float rx, float by1, float top, float bottom, float outerX)
+      float rx, float by1, float top, float bottom, float outerX,
+      boolean L, boolean R, boolean T, boolean B)
   {
     if (k == null)
       return;
+    k = strip_outward(k, L, R, T, B);
     _split_keys.add(new TriKey(k, _split_label_size, top, bottom, outerX,
           lx, by0, rx, by0, rx, by1, lx, by1));
   }
@@ -764,7 +788,8 @@ public class Keyboard2View extends View
   /** Lay [keys] left to right as rectangles, with the space bar given extra
       width. */
   private void add_rect_row(ArrayList<KeyboardData.Key> keys, float x0,
-      float by0, float x1, float by1, float top, float bottom, float outerX)
+      float by0, float x1, float by1, float top, float bottom, float outerX,
+      boolean left_half, boolean T, boolean B)
   {
     int n = keys.size();
     float total = 0f;
@@ -778,7 +803,9 @@ public class Keyboard2View extends View
     for (int i = 0; i < n; i++)
     {
       float ww = (x1 - x0) * w[i] / total;
-      add_split_rect(keys.get(i), cx, by0, cx + ww, by1, top, bottom, outerX);
+      boolean L = left_half && i == 0;
+      boolean R = !left_half && i == n - 1;
+      add_split_rect(keys.get(i), cx, by0, cx + ww, by1, top, bottom, outerX, L, R, T, B);
       cx += ww;
     }
   }
@@ -788,7 +815,7 @@ public class Keyboard2View extends View
       right. Empty slots are skipped (not drawn). */
   private void tess_triangles(ArrayList<KeyboardData.Key> keys, int from,
       int to, float lx0, float by0, float rx0, float by1, float top,
-      float bottom, float outerX, boolean left_half)
+      float bottom, float outerX, boolean left_half, boolean T, boolean B)
   {
     int m = to - from;
     if (m <= 0 || rx0 <= lx0)
@@ -802,6 +829,8 @@ public class Keyboard2View extends View
       float lx = lx0 + c * cw, rx = lx + cw;
       KeyboardData.Key kA = idx < to ? keys.get(idx) : null; idx++;
       KeyboardData.Key kB = idx < to ? keys.get(idx) : null; idx++;
+      if (kA != null) kA = strip_outward(kA, false, false, T, B);
+      if (kB != null) kB = strip_outward(kB, false, false, T, B);
       if (left_half)
       {
         // "/" diagonal: upper-left then lower-right.
