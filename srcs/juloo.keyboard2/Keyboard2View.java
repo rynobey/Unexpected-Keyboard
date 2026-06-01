@@ -883,22 +883,50 @@ public class Keyboard2View extends View
     float[] xs = tk.xs, ys = tk.ys;
     if (xs.length == 3)
     {
-      // Find the pointed tip: the vertex not on the vertical (fat) edge (the
-      // two vertices that share an x). Cut a thin edge parallel to that side.
+      // Truncate the pointed tip into a short vertical "thin side" at the
+      // tip's own x, keeping the full width. The fat side is the vertical edge
+      // (the two vertices sharing an x); the tip is the odd vertex.
       int tip;
       if (Math.abs(xs[0] - xs[1]) < 1.5f) tip = 2;
       else if (Math.abs(xs[1] - xs[2]) < 1.5f) tip = 0;
       else tip = 1;
       int a = (tip + 1) % 3, b = (tip + 2) % 3;
-      float f = SPLIT_TRAP_F;
-      float px = xs[tip] + f * (xs[a] - xs[tip]), py = ys[tip] + f * (ys[a] - ys[tip]);
-      float qx = xs[tip] + f * (xs[b] - xs[tip]), qy = ys[tip] + f * (ys[b] - ys[tip]);
-      inset_path(p, new float[]{ xs[a], px, qx, xs[b] },
-          new float[]{ ys[a], py, qy, ys[b] });
+      float fatX = xs[a];
+      float fatTopY = Math.min(ys[a], ys[b]);
+      float fatBotY = Math.max(ys[a], ys[b]);
+      float tipX = xs[tip], tipY = ys[tip];
+      float depth = (fatBotY - fatTopY) * SPLIT_TRAP_F;
+      // Offset the tip vertically toward the interior to form the thin side.
+      float vY = (Math.abs(tipY - fatTopY) < Math.abs(tipY - fatBotY))
+          ? tipY + depth : tipY - depth;
+      float[] qx = { fatX, fatX, tipX, tipX };
+      float[] qy = { fatTopY, fatBotY, tipY, vY };
+      order_convex(qx, qy);
+      inset_path(p, qx, qy);
     }
     else
     {
       inset_path(p, xs, ys);
+    }
+  }
+
+  /** Sort 4 polygon points into convex (angular) order around their centroid. */
+  private void order_convex(float[] xs, float[] ys)
+  {
+    int n = xs.length;
+    float cx = 0f, cy = 0f;
+    for (int i = 0; i < n; i++) { cx += xs[i]; cy += ys[i]; }
+    cx /= n; cy /= n;
+    for (int i = 1; i < n; i++)
+    {
+      float ax = xs[i], ay = ys[i];
+      double aang = Math.atan2(ay - cy, ax - cx);
+      int j = i - 1;
+      while (j >= 0 && Math.atan2(ys[j] - cy, xs[j] - cx) > aang)
+      {
+        xs[j + 1] = xs[j]; ys[j + 1] = ys[j]; j--;
+      }
+      xs[j + 1] = ax; ys[j + 1] = ay;
     }
   }
 
