@@ -464,8 +464,15 @@ public class Keyboard2View extends View
     if (_split)
     {
       float density = getContext().getResources().getDisplayMetrics().density;
-      _split_top = density * 22f;             // small blank strip above
-      _split_bottom = height - density * 36f; // blank strip below for controls
+      float origTop = density * 22f;            // small blank strip above
+      float origBottom = height - density * 36f; // blank strip below for controls
+      // Apply the height-ratio preference: shrink the key area
+      // symmetrically (gaps grow above and below as ratio decreases).
+      float origH = origBottom - origTop;
+      float newH = origH * _config.split_height_ratio;
+      float pad = (origH - newH) / 2f;
+      _split_top = origTop + pad;
+      _split_bottom = origBottom - pad;
       float gap = width * _config.split_center_ratio;
       _center_rect.left = (width - gap) / 2f;
       _center_rect.right = _center_rect.left + gap;
@@ -746,10 +753,12 @@ public class Keyboard2View extends View
           numkey("1", '!', 4), numkey("2", '@', 4), numkey("3", '#', 4),
           numkey("4", '$', 4), numkey("5", '%', 4)));
     rows.add(mkrow(
-          sk("q", 2, "tab").withKeyValue(4, KeyValue.getKeyByName("esc")),
-          sk("w"), sk("e"), sk("r"), sk("t")));
+          sk("q").withKeyValue(2, KeyValue.getKeyByName("esc")),
+          sk("w").withKeyValue(1, KeyValue.makeCharKey('~')),
+          sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
-    rows.add(mkrow(sk("shift"),
+    rows.add(mkrow(
+          sk("shift").withKeyValue(2, KeyValue.getKeyByName("tab")),
           sk("z").withKeyValue(3, KeyValue.makeCharKey('\\')),
           sk("x"), sk("c"), sk("v")));
     rows.add(mkrow(
@@ -805,22 +814,20 @@ public class Keyboard2View extends View
     for (int i = 0; i <= R; i++)
       bnd[i] = y0 + i * bandH;
     // Outer-column boundaries: same as uniform, except at the camera cutout
-    // where ONLY the lens key extends one direction (up or down) into its
-    // single neighbour. Other keys (incl. all inner keys) are unchanged.
+    // where the lens key grows symmetrically into BOTH neighbours (up and
+    // down by the same amount) so it's easier to press. Other keys (incl.
+    // all inner keys) are unchanged.
     float[] obnd = bnd.clone();
     if (_has_cutout && _cutout_left == left_half)
     {
       int k = (int)((_cutout_rect.centerY() - y0) / bandH);
       if (k >= 0 && k < R)
       {
-        float g = bandH * 0.2f, minH = bandH * 0.55f;
-        boolean canUp = k > 0, canDown = k + 1 < R;
-        boolean preferDown = _cutout_rect.centerY() < (bnd[k] + bnd[k + 1]) / 2f;
-        boolean down = canDown && (preferDown || !canUp);
-        if (down)
+        float g = bandH * 0.15f, minH = bandH * 0.55f;
+        if (k > 0)
+          obnd[k]     = Math.max(bnd[k - 1] + minH, bnd[k]     - g);
+        if (k + 1 < R)
           obnd[k + 1] = Math.min(bnd[k + 2] - minH, bnd[k + 1] + g);
-        else if (canUp)
-          obnd[k] = Math.max(bnd[k - 1] + minH, bnd[k] - g);
       }
     }
     for (int ri = 0; ri < R; ri++)
@@ -897,7 +904,9 @@ public class Keyboard2View extends View
     float[] w = new float[n];
     for (int i = 0; i < n; i++)
     {
-      w[i] = is_space(keys.get(i)) ? 2.5f : 1f;
+      // Space bar is wider than other keys, but reduced from the original
+      // 2.5x so the modifier/enter keys next to it grow into more space.
+      w[i] = is_space(keys.get(i)) ? 2.0f : 1f;
       total += w[i];
     }
     float cx = x0;
@@ -950,12 +959,14 @@ public class Keyboard2View extends View
       }
       else
       {
-        // "\" divider. Upper-right key: fat top, narrow bottom.
+        // "\" divider. First key in the list is visually-leftmost, so it
+        // gets the lower-left polygon (fat bottom, narrow top). Second
+        // key gets the upper-right polygon. Without this swap the right
+        // half reads as u,y,o,i instead of y,u,i,o.
         if (kA != null)
-          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx + d, by0, rx, by0, rx, by1, rx - d, by1));
-        // Lower-left key: narrow top, fat bottom.
+          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx, by0, lx + d, by0, rx - d, by1, lx, by1));
         if (kB != null)
-          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, lx, by0, lx + d, by0, rx - d, by1, lx, by1));
+          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, lx + d, by0, rx, by0, rx, by1, rx - d, by1));
       }
     }
   }

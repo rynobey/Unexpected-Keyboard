@@ -83,6 +83,11 @@ public final class Config
       when in split mode. Loaded from a 30..80 percent SeekBar preference,
       exposed here as a 0.30..0.80 float. */
   public float split_center_ratio;
+  /** Height of the split-mode keyboard as a fraction of the available
+      vertical space. 1.0 = full height (default), smaller values shrink
+      the keyboard symmetrically (gaps growing above and below). Loaded
+      from a 30..100 percent SeekBar preference. */
+  public float split_height_ratio;
 
   /** Manifest meta-data key. Compatible apps opt in by declaring this on
       their <application> tag:
@@ -222,6 +227,7 @@ public final class Config
     space_bar_auto_complete = _prefs.getBoolean("space_bar_auto_complete", false);
     split_mode = _prefs.getString("split_mode", "auto");
     split_center_ratio = _prefs.getInt("split_center_ratio", 60) / 100f;
+    split_height_ratio = _prefs.getInt("split_height_ratio", 100) / 100f;
 
     float screen_width_dp = dm.widthPixels / dm.density;
     wide_screen = screen_width_dp >= WIDE_DEVICE_THRESHOLD;
