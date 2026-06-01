@@ -706,8 +706,12 @@ public class Keyboard2View extends View
           numkey("6", '^', 3), numkey("7", '&', 3), numkey("8", '*', 3),
           numkey("9", '(', 3), numkey("0", ')', 3)));
     rows.add(mkrow(sk("y"), sk("u"), sk("i"), sk("o"), sk("p")));
-    rows.add(mkrow(sk("h"), sk("j"), sk("k"), sk("l")));
-    rows.add(mkrow(sk("b"), sk("n"), sk("m"), sk("backspace")));
+    rows.add(mkrow(sk("h"), sk("j"),
+          sk("k").withKeyValue(3, KeyValue.makeCharKey('['))
+                 .withKeyValue(4, KeyValue.makeCharKey(']')),
+          sk("l").withKeyValue(1, KeyValue.makeCharKey('|'))));
+    rows.add(mkrow(sk("b"), sk("n"), sk("m"),
+          sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete"))));
     rows.add(mkrow(sk("space"), arrows_key(), sk("enter")));
     return rows;
   }
