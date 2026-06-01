@@ -688,7 +688,10 @@ public class Keyboard2View extends View
           sk("q", 2, "tab").withKeyValue(4, KeyValue.getKeyByName("esc")),
           sk("w"), sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
-    rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c"), sk("v")));
+    rows.add(mkrow(sk("shift"),
+          sk("z").withKeyValue(1, KeyValue.makeCharKey('\\'))
+                 .withKeyValue(3, KeyValue.makeCharKey('|')),
+          sk("x"), sk("c"), sk("v")));
     rows.add(mkrow(sk("ctrl", 2, "fn"), sk("alt"), sk("space")));
     return rows;
   }
