@@ -3,6 +3,7 @@ package juloo.keyboard2;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.graphics.Canvas;
+import android.graphics.CornerPathEffect;
 import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -70,6 +71,12 @@ public class Keyboard2View extends View
   private final Path _tri_path = new Path();
   /** One label size shared by all split keys, so letters are consistent. */
   private float _split_label_size = 0f;
+  /** Gap (px) each key is inset from its cell, and rounded-corner effect. */
+  private float _split_gap_px = 3f;
+  private CornerPathEffect _round_effect = null;
+  /** Fraction along the edges from a triangle's pointed tip at which it is
+      truncated into a trapezoid (thin side = this fraction of the fat side). */
+  private static final float SPLIT_TRAP_F = 0.22f;
   /** Characters typed while in split mode, echoed in the center area. */
   private final StringBuilder _test_text = new StringBuilder();
   private final Paint _test_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -551,6 +558,9 @@ public class Keyboard2View extends View
     // A single label size for every key, based on the (uniform) band height.
     int rowCount = Math.max(leftRows.size(), rightRows.size());
     _split_label_size = (bottom - top) / Math.max(1, rowCount) * 0.20f;
+    float density = getResources().getDisplayMetrics().density;
+    _split_gap_px = density * 1.5f;
+    _round_effect = new CornerPathEffect(density * 4f);
     _tri_border_paint.setStyle(Paint.Style.STROKE);
     _tri_border_paint.setStrokeWidth(
         Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
@@ -864,6 +874,54 @@ public class Keyboard2View extends View
     }
   }
 
+  /** Build the rendered (inset, rounded) path for a key. Triangles are first
+      truncated at their pointed tip into a trapezoid. Hit-testing still uses
+      the full polygon, so the visible key is a bit smaller than its touch
+      area. */
+  private void build_key_path(Path p, TriKey tk)
+  {
+    float[] xs = tk.xs, ys = tk.ys;
+    if (xs.length == 3)
+    {
+      // Find the pointed tip: the vertex not on the vertical (fat) edge (the
+      // two vertices that share an x). Cut a thin edge parallel to that side.
+      int tip;
+      if (Math.abs(xs[0] - xs[1]) < 1.5f) tip = 2;
+      else if (Math.abs(xs[1] - xs[2]) < 1.5f) tip = 0;
+      else tip = 1;
+      int a = (tip + 1) % 3, b = (tip + 2) % 3;
+      float f = SPLIT_TRAP_F;
+      float px = xs[tip] + f * (xs[a] - xs[tip]), py = ys[tip] + f * (ys[a] - ys[tip]);
+      float qx = xs[tip] + f * (xs[b] - xs[tip]), qy = ys[tip] + f * (ys[b] - ys[tip]);
+      inset_path(p, new float[]{ xs[a], px, qx, xs[b] },
+          new float[]{ ys[a], py, qy, ys[b] });
+    }
+    else
+    {
+      inset_path(p, xs, ys);
+    }
+  }
+
+  /** Build [p] from the polygon, with every vertex pulled toward the centroid
+      by [_split_gap_px] so adjacent keys show a small gap. */
+  private void inset_path(Path p, float[] xs, float[] ys)
+  {
+    int n = xs.length;
+    float cx = 0f, cy = 0f;
+    for (int i = 0; i < n; i++) { cx += xs[i]; cy += ys[i]; }
+    cx /= n; cy /= n;
+    p.reset();
+    for (int i = 0; i < n; i++)
+    {
+      float vx = xs[i] - cx, vy = ys[i] - cy;
+      float d = (float)Math.hypot(vx, vy);
+      float s = (d > _split_gap_px) ? (d - _split_gap_px) / d : 1f;
+      float ix = cx + vx * s, iy = cy + vy * s;
+      if (i == 0) p.moveTo(ix, iy); else p.lineTo(ix, iy);
+    }
+    p.close();
+  }
+
   /** Draw the triangle keys of both halves. */
   private void drawSplitTriangles(Canvas canvas)
   {
@@ -873,12 +931,10 @@ public class Keyboard2View extends View
         continue;
       boolean down = _pointers.isKeyDown(tk.key);
       Theme.Computed.Key tc_key = down ? _tc.key_activated : _tc.key;
-      _tri_path.reset();
-      _tri_path.moveTo(tk.xs[0], tk.ys[0]);
-      for (int i = 1; i < tk.xs.length; i++)
-        _tri_path.lineTo(tk.xs[i], tk.ys[i]);
-      _tri_path.close();
+      build_key_path(_tri_path, tk);
+      tc_key.bg_paint.setPathEffect(_round_effect);
       canvas.drawPath(_tri_path, tc_key.bg_paint);
+      _tri_border_paint.setPathEffect(_round_effect);
       canvas.drawPath(_tri_path, _tri_border_paint);
       if (tk.key.keys[0] != null)
       {
