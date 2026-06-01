@@ -692,7 +692,11 @@ public class Keyboard2View extends View
           sk("z").withKeyValue(1, KeyValue.makeCharKey('\\'))
                  .withKeyValue(3, KeyValue.makeCharKey('|')),
           sk("x"), sk("c"), sk("v")));
-    rows.add(mkrow(sk("ctrl", 2, "fn"), sk("alt"), sk("space")));
+    rows.add(mkrow(
+          sk("ctrl", 2, "fn"),
+          sk("alt").withKeyValue(1, KeyValue.getKeyByName("config"))
+                   .withKeyValue(2, KeyValue.getKeyByName("change_method")),
+          sk("space").withKeyValue(2, KeyValue.getKeyByName("switch_numeric"))));
     return rows;
   }
 
@@ -712,7 +716,11 @@ public class Keyboard2View extends View
           sk("l").withKeyValue(1, KeyValue.makeCharKey('|'))));
     rows.add(mkrow(sk("b"), sk("n"), sk("m"),
           sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete"))));
-    rows.add(mkrow(sk("space"), arrows_key(), sk("enter")));
+    rows.add(mkrow(
+          sk("space").withKeyValue(1, KeyValue.getKeyByName("switch_emoji"))
+                     .withKeyValue(2, KeyValue.getKeyByName("voice_typing")),
+          arrows_key().withKeyValue(2, KeyValue.getKeyByName("switch_clipboard")),
+          sk("enter").withKeyValue(1, KeyValue.getKeyByName("action"))));
     return rows;
   }
 
