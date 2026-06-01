@@ -689,7 +689,7 @@ public class Keyboard2View extends View
           sk("w"), sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
     rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c"), sk("v")));
-    rows.add(mkrow(sk("ctrl", 2, "fn"), sk("alt"), sk("space", 2, "enter")));
+    rows.add(mkrow(sk("ctrl", 2, "fn"), sk("alt"), sk("space")));
     return rows;
   }
 
