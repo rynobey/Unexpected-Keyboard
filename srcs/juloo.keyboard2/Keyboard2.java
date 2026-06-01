@@ -499,6 +499,45 @@ public class Keyboard2 extends InputMethodService
     return true;
   }
 
+  /** Tell the system how much of our IME window actually occludes the app
+      behind, and where touches should be routed. In split mode the
+      keyboard physically covers the full screen but the centre is
+      transparent — we want the app to:
+        1. stay full-screen (don't resize for our IME)
+        2. receive touches in the centre (pass through the hole)
+      Both are achieved by reporting zero content/visible insets and a
+      touchable region that excludes the centre rect. */
+  @Override
+  public void onComputeInsets(InputMethodService.Insets outInsets)
+  {
+    super.onComputeInsets(outInsets);
+    if (!split_active() || _keyboard_layout_view == null) return;
+
+    // Tell the system our IME doesn't occlude any pixels of the app.
+    // This stops the system from resizing the activity behind, which
+    // otherwise tries to fit into "zero" remaining height.
+    outInsets.contentTopInsets = _keyboard_layout_view.getHeight();
+    outInsets.visibleTopInsets = _keyboard_layout_view.getHeight();
+
+    // Build a touchable region covering the left and right halves only.
+    // Touches in the centre hole pass through to the app behind.
+    RectF c = _keyboard_layout_view.getCenterRect();
+    if (c != null && c.width() > 0 && c.height() > 0) {
+      int[] origin = new int[2];
+      _keyboard_layout_view.getLocationOnScreen(origin);
+      int viewW = _keyboard_layout_view.getWidth();
+      int viewH = _keyboard_layout_view.getHeight();
+      android.graphics.Region region = new android.graphics.Region(
+          origin[0], origin[1], origin[0] + viewW, origin[1] + viewH);
+      android.graphics.Rect hole = new android.graphics.Rect(
+          origin[0] + (int) c.left,  origin[1] + (int) c.top,
+          origin[0] + (int) c.right, origin[1] + (int) c.bottom);
+      region.op(hole, android.graphics.Region.Op.DIFFERENCE);
+      outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_REGION;
+      outInsets.touchableRegion.set(region);
+    }
+  }
+
   /** Called from [onClick] attributes. */
   public void launch_dictionaries_activity(View v)
   {

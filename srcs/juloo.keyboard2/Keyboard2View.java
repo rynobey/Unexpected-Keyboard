@@ -64,6 +64,10 @@ public class Keyboard2View extends View
   /** The center rectangle, recomputed in [onMeasure] when split.
       Width is driven by _config.split_center_ratio (user-tunable). */
   private final RectF _center_rect = new RectF();
+  /** The current centre (hole) rectangle in view-local coords, or null
+      when not in split mode. Used by Keyboard2.onComputeInsets to declare
+      the touchable region. */
+  public RectF getCenterRect() { return _split ? _center_rect : null; }
   /** Top/bottom of the key area in split mode (leaves a blank strip above and
       below, the bottom one giving room for the system hide/globe controls). */
   private float _split_top = 0f;
