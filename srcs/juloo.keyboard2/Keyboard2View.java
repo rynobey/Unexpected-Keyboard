@@ -560,7 +560,7 @@ public class Keyboard2View extends View
     _split_label_size = (bottom - top) / Math.max(1, rowCount) * 0.20f;
     float density = getResources().getDisplayMetrics().density;
     _split_gap_px = density * 1.5f;
-    _round_effect = new CornerPathEffect(density * 4f);
+    _round_effect = new CornerPathEffect(density * 2f);
     _tri_border_paint.setStyle(Paint.Style.STROKE);
     _tri_border_paint.setStrokeWidth(
         Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
