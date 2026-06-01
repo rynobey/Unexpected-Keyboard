@@ -717,9 +717,8 @@ public class Keyboard2View extends View
     rows.add(mkrow(sk("b"), sk("n"), sk("m"),
           sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete"))));
     rows.add(mkrow(
-          sk("space").withKeyValue(1, KeyValue.getKeyByName("switch_emoji"))
-                     .withKeyValue(2, KeyValue.getKeyByName("voice_typing")),
-          arrows_key().withKeyValue(2, KeyValue.getKeyByName("switch_clipboard")),
+          sk("space"),
+          arrows_key(),
           sk("enter").withKeyValue(1, KeyValue.getKeyByName("action"))));
     return rows;
   }
@@ -913,10 +912,11 @@ public class Keyboard2View extends View
             labelColor(sk, down, true), tk.labelSize * 0.6f, Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }
-      // Orthogonal swipe sub-keys (N/S/E/W) drawn at edge midpoints, skipping
-      // edges that lie along a physical screen edge.
+      // Orthogonal swipe sub-keys (N/S/E/W) drawn at edge midpoints. Only for
+      // rectangles — a triangle has no clean N/S/E/W edge (its hypotenuse
+      // would mis-place the glyph), so triangles use corner swipes only.
       int n = tk.xs.length;
-      for (int i = 0; i < n; i++)
+      for (int i = 0; n == 4 && i < n; i++)
       {
         int j = (i + 1) % n;
         if (tk.onEdge[i] && tk.onEdge[j])
