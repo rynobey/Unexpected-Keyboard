@@ -69,6 +69,11 @@ public class Keyboard2View extends View
       below, the bottom one giving room for the system hide/globe controls). */
   private float _split_top = 0f;
   private float _split_bottom = 0f;
+  /** The selfie-camera cutout on a side edge (view coords), if any. The row at
+      it is grown taller and the obscured key's label is shifted clear. */
+  private final RectF _cutout_rect = new RectF();
+  private boolean _has_cutout = false;
+  private boolean _cutout_left = false;
   /** The triangle (and occasional rectangle) keys of both halves, rebuilt in
       [onMeasure] when split. */
   private final ArrayList<TriKey> _split_keys = new ArrayList<TriKey>();
@@ -571,6 +576,7 @@ public class Keyboard2View extends View
     float density = getResources().getDisplayMetrics().density;
     _split_gap_px = density * 1.5f;
     _round_effect = new CornerPathEffect(density * 2f);
+    compute_cutout(viewW);
     _tri_border_paint.setStyle(Paint.Style.STROKE);
     _tri_border_paint.setStrokeWidth(
         Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
@@ -605,6 +611,33 @@ public class Keyboard2View extends View
     for (TriKey tk : _split_keys)
       if (tk.chamfer(px, py, cr))
         return;
+  }
+
+  /** Find a selfie-camera cutout sitting on a left/right edge, in view coords. */
+  private void compute_cutout(int viewW)
+  {
+    _has_cutout = false;
+    _cutout_rect.setEmpty();
+    if (VERSION.SDK_INT < 28)
+      return;
+    WindowInsets wi = getRootWindowInsets();
+    if (wi == null)
+      return;
+    android.view.DisplayCutout dc = wi.getDisplayCutout();
+    if (dc == null)
+      return;
+    for (Rect r : dc.getBoundingRects())
+    {
+      boolean leftEdge = r.left <= 2;
+      boolean rightEdge = r.right >= viewW - 2;
+      if (leftEdge || rightEdge)
+      {
+        _cutout_rect.set(r.left, r.top, r.right, r.bottom);
+        _cutout_left = leftEdge;
+        _has_cutout = true;
+        return;
+      }
+    }
   }
 
   private KeyboardData.Key make_space()
@@ -727,8 +760,12 @@ public class Keyboard2View extends View
           sk("l").withKeyValue(1, KeyValue.makeCharKey('|'))));
     rows.add(mkrow(sk("b"), sk("n"), sk("m"),
           sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete"))));
+    // Right space bar: discrete arrow keys (DPAD) on all four swipe edges,
+    // instead of the cursor slider (which the left space bar keeps).
     rows.add(mkrow(
-          sk("space").withKeyValue(7, KeyValue.getKeyByName("up"))
+          sk("space").withKeyValue(5, KeyValue.getKeyByName("left"))
+                     .withKeyValue(6, KeyValue.getKeyByName("right"))
+                     .withKeyValue(7, KeyValue.getKeyByName("up"))
                      .withKeyValue(8, KeyValue.getKeyByName("down")),
           sk("enter").withKeyValue(1, KeyValue.getKeyByName("action").withSymbol("act"))));
     return rows;
@@ -747,14 +784,29 @@ public class Keyboard2View extends View
     float W = x1 - x0;
     float bandH = (y1 - y0) / R;
     boolean left_half = outerX <= 0f;
+    // Band boundaries; grow the band at the camera cutout (this half's side),
+    // shrinking its neighbours, so that key gets a larger pressable area.
+    float[] bnd = new float[R + 1];
+    for (int i = 0; i <= R; i++)
+      bnd[i] = y0 + i * bandH;
+    if (_has_cutout && _cutout_left == left_half)
+    {
+      int k = (int)((_cutout_rect.centerY() - y0) / bandH);
+      if (k >= 0 && k < R)
+      {
+        float g = bandH * 0.4f, minH = bandH * 0.55f;
+        bnd[k] = Math.max((k > 0 ? bnd[k - 1] : y0) + minH, bnd[k] - g);
+        bnd[k + 1] = Math.min((k + 1 < R ? bnd[k + 2] : y1) - minH, bnd[k + 1] + g);
+      }
+    }
     for (int ri = 0; ri < R; ri++)
     {
       ArrayList<KeyboardData.Key> keys = rows.get(ri);
       int n = keys.size();
       if (n <= 0)
         continue;
-      float by0 = y0 + ri * bandH;
-      float by1 = by0 + bandH;
+      float by0 = bnd[ri];
+      float by1 = bnd[ri + 1];
       boolean top_edge = (ri == 0);
       boolean bot_edge = (ri == R - 1);
       // The number row (top) is rendered as rectangles so corner symbols are
@@ -931,7 +983,12 @@ public class Keyboard2View extends View
           Paint p = tc_key.label_paint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
               labelColor(kv, down, false), tk.labelSize);
           p.setTextAlign(Paint.Align.CENTER);
-          canvas.drawText(kv.getString(), tk.cx,
+          // If the camera cutout sits over this key's label, nudge it clear.
+          float lblx = tk.cx;
+          if (_has_cutout && _cutout_rect.contains(tk.cx, tk.cy))
+            lblx = _cutout_left ? _cutout_rect.right + tk.labelSize * 0.6f
+                                : _cutout_rect.left - tk.labelSize * 0.6f;
+          canvas.drawText(kv.getString(), lblx,
               tk.cy - (p.ascent() + p.descent()) / 2f, p);
         }
       }
