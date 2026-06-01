@@ -380,6 +380,31 @@ public class Keyboard2 extends InputMethodService
                     : ViewGroup.LayoutParams.WRAP_CONTENT);
     updateLayoutGravityOf((View) inputArea.getParent(), Gravity.BOTTOM);
 
+    // Clear the panel background painted by the system between the IME
+    // window and our keyboard container. Without this, even with the
+    // Window background set transparent (above) and the container's bg
+    // set alpha=0 (in refresh_config), the inputArea / its parent still
+    // paints grey from the system's IME theme — visible through the
+    // split-mode hole. Walking up from the container's parent leaves the
+    // LinearLayout below intact, so non-split mode still uses the
+    // colorKeyboard background.
+    clearBackgroundChainAboveContainer(window);
+  }
+
+  /** Walk up from _keyboard_container_view's parent through the IME's
+      decor view, setting each level's background to null. */
+  private void clearBackgroundChainAboveContainer(Window window)
+  {
+    if (_keyboard_container_view == null) return;
+    final View decor = window.getDecorView();
+    ViewParent p = _keyboard_container_view.getParent();
+    while (p instanceof View)
+    {
+      View pv = (View) p;
+      pv.setBackground(null);
+      if (pv == decor) break;
+      p = pv.getParent();
+    }
   }
 
   private static void updateLayoutHeightOf(final Window window, final int layoutHeight) {
