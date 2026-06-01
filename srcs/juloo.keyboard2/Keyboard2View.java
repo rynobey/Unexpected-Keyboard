@@ -454,8 +454,8 @@ public class Keyboard2View extends View
     if (_split)
     {
       float density = getContext().getResources().getDisplayMetrics().density;
-      _split_top = density * 10f;             // small blank strip above
-      _split_bottom = height - density * 30f; // blank strip below for controls
+      _split_top = density * 20f;             // small blank strip above
+      _split_bottom = height - density * 33f; // blank strip below for controls
       float gap = width * SPLIT_CENTER_RATIO;
       _center_rect.left = (width - gap) / 2f;
       _center_rect.right = _center_rect.left + gap;
