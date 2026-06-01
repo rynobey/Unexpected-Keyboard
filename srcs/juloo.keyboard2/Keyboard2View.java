@@ -132,7 +132,9 @@ public class Keyboard2View extends View
       {
         sx += xs[i];
         sy += ys[i];
-        onEdge[i] = near(ys[i], top) || near(ys[i], bottom) || near(xs[i], outerX);
+        // Only the outer (left/right) side is a hard screen edge now; the
+        // top/bottom have blank strips, so swipes there are reachable.
+        onEdge[i] = near(xs[i], outerX);
       }
       cx = sx / n;
       cy = sy / n;
@@ -699,8 +701,7 @@ public class Keyboard2View extends View
           sk("w"), sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
     rows.add(mkrow(sk("shift"),
-          sk("z").withKeyValue(1, KeyValue.makeCharKey('\\'))
-                 .withKeyValue(3, KeyValue.makeCharKey('|')),
+          sk("z").withKeyValue(3, KeyValue.makeCharKey('\\')),
           sk("x"), sk("c"), sk("v")));
     rows.add(mkrow(
           sk("ctrl", 2, "fn"),
@@ -727,8 +728,8 @@ public class Keyboard2View extends View
     rows.add(mkrow(sk("b"), sk("n"), sk("m"),
           sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete"))));
     rows.add(mkrow(
-          sk("space"),
-          arrows_key(),
+          sk("space").withKeyValue(7, KeyValue.getKeyByName("up"))
+                     .withKeyValue(8, KeyValue.getKeyByName("down")),
           sk("enter").withKeyValue(1, KeyValue.getKeyByName("action").withSymbol("act"))));
     return rows;
   }
@@ -789,9 +790,7 @@ public class Keyboard2View extends View
     boolean[] drop = new boolean[9]; // 1nw 2ne 3sw 4se 5w 6e 7n 8s
     if (L) { drop[1] = drop[3] = drop[5] = true; }
     if (R) { drop[2] = drop[4] = drop[6] = true; }
-    if (T) { drop[1] = drop[2] = drop[7] = true; }
-    // Bottom edge intentionally not stripped: the arrows key needs its down
-    // swipe, and the bottom row is reachable enough.
+    // Top/bottom not stripped: the blank strips keep those swipes reachable.
     for (int i = 1; i < 9; i++)
       if (drop[i] && k.keys[i] != null)
         k = k.withKeyValue(i, null);
@@ -954,7 +953,9 @@ public class Keyboard2View extends View
         if (sk == null)
           continue;
         shown[sub] = true;
-        float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.32f;
+        // More horizontal inset so glyphs don't touch the side edges; keep the
+        // vertical position (top/bottom spacing already looks right).
+        float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.5f;
         float ay = tk.ys[i] + (tk.cy - tk.ys[i]) * 0.32f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
             labelColor(sk, down, true), tk.labelSize * 0.78f, Paint.Align.CENTER);
