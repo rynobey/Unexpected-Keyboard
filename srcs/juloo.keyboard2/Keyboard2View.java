@@ -790,9 +790,10 @@ public class Keyboard2View extends View
           // NE=| and SW=\ for us, so no manual modifiers needed.
           sk("l")));
     rows.add(mkrow(sk("b"), sk("n"),
-          // M: move ' (single quote) to NE; the base had it on SW.
+          // M: ' on NE (moved from SW), . on SW so the full stop is still
+          // reachable from M (it's gone everywhere else in the split row).
           sk("m").withKeyValue(2, KeyValue.makeCharKey('\''))
-                 .withKeyValue(3, null),
+                 .withKeyValue(3, KeyValue.makeCharKey('.')),
           sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete"))));
     // Right space bar: discrete arrow keys (DPAD) on all four swipe edges,
     // instead of the cursor slider (which the left space bar keeps).
