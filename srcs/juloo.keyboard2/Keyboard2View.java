@@ -619,9 +619,23 @@ public class Keyboard2View extends View
     {
       KeyboardData.Key k = _keyboard.findKeyWithValue(kv);
       if (k != null && k.keys[0] != null && k.keys[0].sameKey(kv))
-        return k;
+        return strip_digit_swipes(k);
     }
     return KeyboardData.Key.EMPTY.withKeyValue(0, kv);
+  }
+
+  /** Remove digit swipe sub-keys (we have a dedicated number row), keeping
+      other symbols. */
+  private KeyboardData.Key strip_digit_swipes(KeyboardData.Key k)
+  {
+    for (int i = 1; i < k.keys.length; i++)
+    {
+      KeyValue kv = k.keys[i];
+      if (kv != null && kv.getKind() == KeyValue.Kind.Char
+          && Character.isDigit(kv.getChar()))
+        k = k.withKeyValue(i, null);
+    }
+    return k;
   }
 
   /** Build a key with an added swipe modifier in direction [dir]. */
