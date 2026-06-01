@@ -74,9 +74,10 @@ public class Keyboard2View extends View
   /** Gap (px) each key is inset from its cell, and rounded-corner effect. */
   private float _split_gap_px = 3f;
   private CornerPathEffect _round_effect = null;
-  /** Fraction along the edges from a triangle's pointed tip at which it is
-      truncated into a trapezoid (thin side = this fraction of the fat side). */
-  private static final float SPLIT_TRAP_F = 0.22f;
+  /** How far (fraction of cell width) the dividing diagonal between a cell's
+      two keys is offset at top and bottom, so each key is a near-rectangular
+      trapezoid (narrow side = this fraction of the cell width). */
+  private static final float SPLIT_TRAP_F = 0.35f;
   /** Characters typed while in split mode, echoed in the center area. */
   private final StringBuilder _test_text = new StringBuilder();
   private final Paint _test_paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -855,21 +856,27 @@ public class Keyboard2View extends View
       KeyboardData.Key kB = idx < to ? keys.get(idx) : null; idx++;
       if (kA != null) kA = strip_outward(kA, false, false, T, B);
       if (kB != null) kB = strip_outward(kB, false, false, T, B);
+      // The cell's two keys are interlocking trapezoids: the dividing diagonal
+      // is offset by [d] at top and bottom so neither key is pointed. Each key
+      // is near-rectangular with one horizontal side fatter than the other.
+      float d = (rx - lx) * SPLIT_TRAP_F;
       if (left_half)
       {
-        // "/" diagonal: upper-left then lower-right.
+        // "/" divider. Upper-left key: fat top, narrow bottom.
         if (kA != null)
-          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx, by0, rx, by0, lx, by1));
+          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx, by0, rx - d, by0, lx + d, by1, lx, by1));
+        // Lower-right key: narrow top, fat bottom.
         if (kB != null)
-          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, rx, by0, rx, by1, lx, by1));
+          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, rx - d, by0, rx, by0, rx, by1, lx + d, by1));
       }
       else
       {
-        // "\" diagonal: upper-right then lower-left.
+        // "\" divider. Upper-right key: fat top, narrow bottom.
         if (kA != null)
-          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx, by0, rx, by0, rx, by1));
+          _split_keys.add(new TriKey(kA, labelSize, top, bottom, outerX, lx + d, by0, rx, by0, rx, by1, rx - d, by1));
+        // Lower-left key: narrow top, fat bottom.
         if (kB != null)
-          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, lx, by0, rx, by1, lx, by1));
+          _split_keys.add(new TriKey(kB, labelSize, top, bottom, outerX, lx, by0, lx + d, by0, rx - d, by1, lx, by1));
       }
     }
   }
@@ -880,54 +887,8 @@ public class Keyboard2View extends View
       area. */
   private void build_key_path(Path p, TriKey tk)
   {
-    float[] xs = tk.xs, ys = tk.ys;
-    if (xs.length == 3)
-    {
-      // Truncate the pointed tip into a short vertical "thin side" at the
-      // tip's own x, keeping the full width. The fat side is the vertical edge
-      // (the two vertices sharing an x); the tip is the odd vertex.
-      int tip;
-      if (Math.abs(xs[0] - xs[1]) < 1.5f) tip = 2;
-      else if (Math.abs(xs[1] - xs[2]) < 1.5f) tip = 0;
-      else tip = 1;
-      int a = (tip + 1) % 3, b = (tip + 2) % 3;
-      float fatX = xs[a];
-      float fatTopY = Math.min(ys[a], ys[b]);
-      float fatBotY = Math.max(ys[a], ys[b]);
-      float tipX = xs[tip], tipY = ys[tip];
-      float depth = (fatBotY - fatTopY) * SPLIT_TRAP_F;
-      // Offset the tip vertically toward the interior to form the thin side.
-      float vY = (Math.abs(tipY - fatTopY) < Math.abs(tipY - fatBotY))
-          ? tipY + depth : tipY - depth;
-      float[] qx = { fatX, fatX, tipX, tipX };
-      float[] qy = { fatTopY, fatBotY, tipY, vY };
-      order_convex(qx, qy);
-      inset_path(p, qx, qy);
-    }
-    else
-    {
-      inset_path(p, xs, ys);
-    }
-  }
-
-  /** Sort 4 polygon points into convex (angular) order around their centroid. */
-  private void order_convex(float[] xs, float[] ys)
-  {
-    int n = xs.length;
-    float cx = 0f, cy = 0f;
-    for (int i = 0; i < n; i++) { cx += xs[i]; cy += ys[i]; }
-    cx /= n; cy /= n;
-    for (int i = 1; i < n; i++)
-    {
-      float ax = xs[i], ay = ys[i];
-      double aang = Math.atan2(ay - cy, ax - cx);
-      int j = i - 1;
-      while (j >= 0 && Math.atan2(ys[j] - cy, xs[j] - cx) > aang)
-      {
-        xs[j + 1] = xs[j]; ys[j + 1] = ys[j]; j--;
-      }
-      xs[j + 1] = ax; ys[j + 1] = ay;
-    }
+    // The key polygon is already a trapezoid/rectangle; just inset it.
+    inset_path(p, tk.xs, tk.ys);
   }
 
   /** Build [p] from the polygon, with every vertex pulled toward the centroid
@@ -977,6 +938,9 @@ public class Keyboard2View extends View
         }
       }
       // Swipe sub-keys: only on corners that aren't on a physical screen edge.
+      // A trapezoid's two narrow-side vertices map to the same direction, so
+      // dedupe to avoid drawing a glyph twice.
+      boolean[] shown = new boolean[9];
       for (int i = 0; i < tk.xs.length; i++)
       {
         if (tk.onEdge[i])
@@ -985,11 +949,12 @@ public class Keyboard2View extends View
         // Map the corner direction to one of the four diagonal sub-key slots:
         // 1=NW, 2=NE, 3=SW, 4=SE (see LABEL_POSITION_*).
         int sub = (dx < 0) ? (dy < 0 ? 1 : 3) : (dy < 0 ? 2 : 4);
-        if (tk.key.keys[sub] == null)
+        if (shown[sub] || tk.key.keys[sub] == null)
           continue;
         KeyValue sk = modifyKey(tk.key.keys[sub], _mods);
         if (sk == null)
           continue;
+        shown[sub] = true;
         float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.32f;
         float ay = tk.ys[i] + (tk.cy - tk.ys[i]) * 0.32f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
