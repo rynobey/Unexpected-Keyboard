@@ -461,8 +461,8 @@ public class Keyboard2View extends View
     if (_split)
     {
       float density = getContext().getResources().getDisplayMetrics().density;
-      _split_top = density * 20f;             // small blank strip above
-      _split_bottom = height - density * 33f; // blank strip below for controls
+      _split_top = density * 22f;             // small blank strip above
+      _split_bottom = height - density * 36f; // blank strip below for controls
       float gap = width * SPLIT_CENTER_RATIO;
       _center_rect.left = (width - gap) / 2f;
       _center_rect.right = _center_rect.left + gap;
@@ -737,7 +737,7 @@ public class Keyboard2View extends View
           sk("z").withKeyValue(3, KeyValue.makeCharKey('\\')),
           sk("x"), sk("c"), sk("v")));
     rows.add(mkrow(
-          sk("ctrl", 2, "fn"),
+          sk("ctrl", 2, "fn").withKeyValue(4, null), // drop inherited switch_numeric
           sk("alt").withKeyValue(1, KeyValue.getKeyByName("config"))
                    .withKeyValue(2, KeyValue.getKeyByName("change_method")),
           sk("space").withKeyValue(2, KeyValue.getKeyByName("switch_numeric"))));
@@ -784,19 +784,27 @@ public class Keyboard2View extends View
     float W = x1 - x0;
     float bandH = (y1 - y0) / R;
     boolean left_half = outerX <= 0f;
-    // Band boundaries; grow the band at the camera cutout (this half's side),
-    // shrinking its neighbours, so that key gets a larger pressable area.
+    // Uniform band boundaries for the inner keys.
     float[] bnd = new float[R + 1];
     for (int i = 0; i <= R; i++)
       bnd[i] = y0 + i * bandH;
+    // Outer-column boundaries: same as uniform, except at the camera cutout
+    // where ONLY the lens key extends one direction (up or down) into its
+    // single neighbour. Other keys (incl. all inner keys) are unchanged.
+    float[] obnd = bnd.clone();
     if (_has_cutout && _cutout_left == left_half)
     {
       int k = (int)((_cutout_rect.centerY() - y0) / bandH);
       if (k >= 0 && k < R)
       {
         float g = bandH * 0.4f, minH = bandH * 0.55f;
-        bnd[k] = Math.max((k > 0 ? bnd[k - 1] : y0) + minH, bnd[k] - g);
-        bnd[k + 1] = Math.min((k + 1 < R ? bnd[k + 2] : y1) - minH, bnd[k + 1] + g);
+        boolean canUp = k > 0, canDown = k + 1 < R;
+        boolean preferDown = _cutout_rect.centerY() < (bnd[k] + bnd[k + 1]) / 2f;
+        boolean down = canDown && (preferDown || !canUp);
+        if (down)
+          obnd[k + 1] = Math.min(bnd[k + 2] - minH, bnd[k + 1] + g);
+        else if (canUp)
+          obnd[k] = Math.max(bnd[k - 1] + minH, bnd[k] - g);
       }
     }
     for (int ri = 0; ri < R; ri++)
@@ -807,6 +815,8 @@ public class Keyboard2View extends View
         continue;
       float by0 = bnd[ri];
       float by1 = bnd[ri + 1];
+      float oby0 = obnd[ri];
+      float oby1 = obnd[ri + 1];
       boolean top_edge = (ri == 0);
       boolean bot_edge = (ri == R - 1);
       // The number row (top) is rendered as rectangles so corner symbols are
@@ -817,18 +827,18 @@ public class Keyboard2View extends View
         float rectW = W * 0.25f;
         if (left_half)
         {
-          add_split_rect(keys.get(0), x0, by0, x0 + rectW, by1, y0, y1, outerX, true, false, top_edge, bot_edge);
+          add_split_rect(keys.get(0), x0, oby0, x0 + rectW, oby1, y0, y1, outerX, true, false, top_edge, bot_edge);
           tess_triangles(keys, 1, n, x0 + rectW, by0, x1, by1, y0, y1, outerX, true, top_edge, bot_edge);
         }
         else
         {
-          add_split_rect(keys.get(n - 1), x1 - rectW, by0, x1, by1, y0, y1, outerX, false, true, top_edge, bot_edge);
+          add_split_rect(keys.get(n - 1), x1 - rectW, oby0, x1, oby1, y0, y1, outerX, false, true, top_edge, bot_edge);
           tess_triangles(keys, 0, n - 1, x0, by0, x1 - rectW, by1, y0, y1, outerX, false, top_edge, bot_edge);
         }
       }
       else
       {
-        add_rect_row(keys, x0, by0, x1, by1, y0, y1, outerX, left_half, top_edge, bot_edge);
+        add_rect_row(keys, x0, by0, x1, by1, oby0, oby1, y0, y1, outerX, left_half, top_edge, bot_edge);
       }
     }
   }
@@ -863,8 +873,8 @@ public class Keyboard2View extends View
   /** Lay [keys] left to right as rectangles, with the space bar given extra
       width. */
   private void add_rect_row(ArrayList<KeyboardData.Key> keys, float x0,
-      float by0, float x1, float by1, float top, float bottom, float outerX,
-      boolean left_half, boolean T, boolean B)
+      float by0, float x1, float by1, float oby0, float oby1, float top,
+      float bottom, float outerX, boolean left_half, boolean T, boolean B)
   {
     int n = keys.size();
     float total = 0f;
@@ -880,7 +890,10 @@ public class Keyboard2View extends View
       float ww = (x1 - x0) * w[i] / total;
       boolean L = left_half && i == 0;
       boolean R = !left_half && i == n - 1;
-      add_split_rect(keys.get(i), cx, by0, cx + ww, by1, top, bottom, outerX, L, R, T, B);
+      // The outer (edge) key uses the possibly-extended camera bounds.
+      float ky0 = (L || R) ? oby0 : by0;
+      float ky1 = (L || R) ? oby1 : by1;
+      add_split_rect(keys.get(i), cx, ky0, cx + ww, ky1, top, bottom, outerX, L, R, T, B);
       cx += ww;
     }
   }
