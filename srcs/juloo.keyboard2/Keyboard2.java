@@ -7,6 +7,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -395,7 +396,16 @@ public class Keyboard2 extends InputMethodService
 
   /** In split mode: save the original window + chain backgrounds (first
       time only) and replace them with transparency so the central hole
-      can show the app behind. */
+      can show the app behind.
+
+      Crucially, also request PixelFormat.TRANSLUCENT for the window's
+      surface buffer. Without this, the IME's window surface is allocated
+      as RGBx_8888 (no alpha channel) — verified via dumpsys SurfaceFlinger
+      — so the "transparent" centre is just opaque black pixels regardless
+      of what View backgrounds we clear. Switching to TRANSLUCENT makes
+      Android allocate RGBA_8888, allowing the central hole to actually
+      composite through to the SurfaceView (e.g. termux-x11's X canvas)
+      underneath. */
   private void applyTransparencyForSplit(Window window)
   {
     if (!_saved_window_bg_valid) {
@@ -403,6 +413,7 @@ public class Keyboard2 extends InputMethodService
       _saved_window_bg_valid = true;
     }
     window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+    window.setFormat(PixelFormat.TRANSLUCENT);
 
     if (_keyboard_container_view == null) return;
     final View decor = window.getDecorView();
@@ -428,6 +439,9 @@ public class Keyboard2 extends InputMethodService
       _saved_window_bg = null;
       _saved_window_bg_valid = false;
     }
+    // Restore the default opaque buffer format so non-split sessions
+    // don't pay the alpha-blending cost.
+    window.setFormat(PixelFormat.OPAQUE);
     if (!_saved_chain_bgs.isEmpty()) {
       for (java.util.Map.Entry<View, Drawable> e : _saved_chain_bgs.entrySet()) {
         e.getKey().setBackground(e.getValue());
