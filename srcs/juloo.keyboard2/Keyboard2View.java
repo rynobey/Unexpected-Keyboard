@@ -619,23 +619,35 @@ public class Keyboard2View extends View
     {
       KeyboardData.Key k = _keyboard.findKeyWithValue(kv);
       if (k != null && k.keys[0] != null && k.keys[0].sameKey(kv))
-        return strip_digit_swipes(k);
+        return strip_moved_swipes(k);
     }
     return KeyboardData.Key.EMPTY.withKeyValue(0, kv);
   }
 
-  /** Remove digit swipe sub-keys (we have a dedicated number row), keeping
-      other symbols. */
-  private KeyboardData.Key strip_digit_swipes(KeyboardData.Key k)
+  /** Symbols moved onto the number row (US shift+number), removed from the
+      letter keys they sit on in the base layout. */
+  private static final String NUMBER_SYMBOLS = "!@#$%^&*()";
+
+  /** Remove digit swipes (we have a number row) and the shift-number symbols
+      (moved onto the number keys), keeping other symbols like ~. */
+  private KeyboardData.Key strip_moved_swipes(KeyboardData.Key k)
   {
     for (int i = 1; i < k.keys.length; i++)
     {
       KeyValue kv = k.keys[i];
-      if (kv != null && kv.getKind() == KeyValue.Kind.Char
-          && Character.isDigit(kv.getChar()))
+      if (kv == null || kv.getKind() != KeyValue.Kind.Char)
+        continue;
+      char c = kv.getChar();
+      if (Character.isDigit(c) || NUMBER_SYMBOLS.indexOf(c) >= 0)
         k = k.withKeyValue(i, null);
     }
     return k;
+  }
+
+  /** A number key with its shift-symbol on the down swipe. */
+  private KeyboardData.Key numkey(String digit, char symbol)
+  {
+    return sk(digit).withKeyValue(8, KeyValue.makeCharKey(symbol));
   }
 
   /** Build a key with an added swipe modifier in direction [dir]. */
@@ -668,7 +680,9 @@ public class Keyboard2View extends View
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
-    rows.add(mkrow(sk("1", 6, "esc"), sk("2"), sk("3"), sk("4"), sk("5")));
+    rows.add(mkrow(
+          numkey("1", '!').withKeyValue(6, KeyValue.getKeyByName("esc")),
+          numkey("2", '@'), numkey("3", '#'), numkey("4", '$'), numkey("5", '%')));
     rows.add(mkrow(sk("q", 6, "tab"), sk("w"), sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
     rows.add(mkrow(sk("shift"), sk("z"), sk("x"), sk("c"), sk("v")));
@@ -681,7 +695,9 @@ public class Keyboard2View extends View
   {
     ArrayList<ArrayList<KeyboardData.Key>> rows =
       new ArrayList<ArrayList<KeyboardData.Key>>();
-    rows.add(mkrow(sk("6"), sk("7"), sk("8"), sk("9"), sk("0")));
+    rows.add(mkrow(
+          numkey("6", '^'), numkey("7", '&'), numkey("8", '*'),
+          numkey("9", '('), numkey("0", ')')));
     rows.add(mkrow(sk("y"), sk("u"), sk("i"), sk("o"), sk("p")));
     rows.add(mkrow(sk("h"), sk("j"), sk("k"), sk("l")));
     rows.add(mkrow(sk("b"), sk("n"), sk("m"), sk("backspace")));
