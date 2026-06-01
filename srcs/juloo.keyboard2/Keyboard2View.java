@@ -65,6 +65,10 @@ public class Keyboard2View extends View
   private static final float SPLIT_CENTER_RATIO = 0.60f;
   /** The center rectangle, recomputed in [onMeasure] when split. */
   private final RectF _center_rect = new RectF();
+  /** Top/bottom of the key area in split mode (leaves a blank strip above and
+      below, the bottom one giving room for the system hide/globe controls). */
+  private float _split_top = 0f;
+  private float _split_bottom = 0f;
   /** The triangle (and occasional rectangle) keys of both halves, rebuilt in
       [onMeasure] when split. */
   private final ArrayList<TriKey> _split_keys = new ArrayList<TriKey>();
@@ -449,11 +453,14 @@ public class Keyboard2View extends View
           + _config.marginTop + _marginBottom);
     if (_split)
     {
+      float density = getContext().getResources().getDisplayMetrics().density;
+      _split_top = density * 10f;             // small blank strip above
+      _split_bottom = height - density * 30f; // blank strip below for controls
       float gap = width * SPLIT_CENTER_RATIO;
       _center_rect.left = (width - gap) / 2f;
       _center_rect.right = _center_rect.left + gap;
-      _center_rect.top = _tc.margin_top;
-      _center_rect.bottom = height - _marginBottom;
+      _center_rect.top = _split_top;
+      _center_rect.bottom = _split_bottom;
       buildSplitTriangles(width, height);
     }
     setMeasuredDimension(width, height);
@@ -549,9 +556,9 @@ public class Keyboard2View extends View
   private void buildSplitTriangles(int viewW, int viewH)
   {
     _split_keys.clear();
-    // Fill all the way to the top and bottom edges of the screen.
-    float top = 0f;
-    float bottom = viewH;
+    // Leave a blank strip above and below the keys.
+    float top = _split_top;
+    float bottom = _split_bottom;
     // Dedicated QWERTY split layout (number row on top, modifiers at the
     // bottom, esc/tab/fn as swipe modifiers).
     ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_layout_left();
@@ -569,16 +576,8 @@ public class Keyboard2View extends View
     // Outer side fills to the screen edge (0 on the left, viewW on the right).
     tessellateRows(0f, top, _center_rect.left, bottom, 0f, leftRows);
     tessellateRows(_center_rect.right, top, viewW, bottom, viewW, rightRows);
-    // Bevel the two bottom screen corners to follow the Pixel's rounded
-    // corners with a slanted edge.
-    float cr = corner_radius_px();
-    if (cr > 0f)
-    {
-      chamfer_corner(0f, top, cr);
-      chamfer_corner(viewW, top, cr);
-      chamfer_corner(0f, bottom, cr);
-      chamfer_corner(viewW, bottom, cr);
-    }
+    // No screen-corner bevel needed: the blank top/bottom strips keep the keys
+    // away from the rounded screen corners.
   }
 
   /** Radius (px) of the device's rounded corners, with a sensible fallback. */
@@ -730,7 +729,7 @@ public class Keyboard2View extends View
     rows.add(mkrow(
           sk("space"),
           arrows_key(),
-          sk("enter").withKeyValue(1, KeyValue.getKeyByName("action"))));
+          sk("enter").withKeyValue(1, KeyValue.getKeyByName("action").withSymbol("act"))));
     return rows;
   }
 
@@ -958,7 +957,7 @@ public class Keyboard2View extends View
         float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.32f;
         float ay = tk.ys[i] + (tk.cy - tk.ys[i]) * 0.32f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-            labelColor(sk, down, true), tk.labelSize * 0.6f, Paint.Align.CENTER);
+            labelColor(sk, down, true), tk.labelSize * 0.78f, Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }
       // Orthogonal swipe sub-keys (N/S/E/W) drawn at edge midpoints. Only for
@@ -982,7 +981,7 @@ public class Keyboard2View extends View
         float ax = mx + (tk.cx - mx) * 0.30f;
         float ay = my + (tk.cy - my) * 0.30f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-            labelColor(sk, down, true), tk.labelSize * 0.6f, Paint.Align.CENTER);
+            labelColor(sk, down, true), tk.labelSize * 0.78f, Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }
     }
