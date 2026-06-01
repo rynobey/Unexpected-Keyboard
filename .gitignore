@@ -1,4 +1,9 @@
+# Block keystores by default. The single committed `debug.keystore` (below
+# the wildcard, un-ignored by the explicit `!`) is intentional: it gives
+# every CI build the same signature so `adb install -r` upgrades work in
+# place. A debug keystore isn't a secret (well-known password "debug0").
 *.keystore
+!debug.keystore
 *.keystore.asc
 /*-keystore.conf
 *.iml
