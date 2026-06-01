@@ -753,12 +753,16 @@ public class Keyboard2View extends View
           numkey("1", '!', 4), numkey("2", '@', 4), numkey("3", '#', 4),
           numkey("4", '$', 4), numkey("5", '%', 4)));
     rows.add(mkrow(
-          sk("q").withKeyValue(2, KeyValue.getKeyByName("esc")),
+          // ESC on N (swipe up) — was on NE, but NE on a left-edge key
+          // collides with the back gesture. The base layout's SE=esc gets
+          // stripped automatically by strip_outward for edge keys.
+          sk("q").withKeyValue(7, KeyValue.getKeyByName("esc")),
           sk("w").withKeyValue(1, KeyValue.makeCharKey('~')),
           sk("e"), sk("r"), sk("t")));
     rows.add(mkrow(sk("a"), sk("s"), sk("d"), sk("f"), sk("g")));
     rows.add(mkrow(
-          sk("shift").withKeyValue(2, KeyValue.getKeyByName("tab")),
+          // Tab on N (swipe up) — same reasoning as ESC on Q.
+          sk("shift").withKeyValue(7, KeyValue.getKeyByName("tab")),
           sk("z").withKeyValue(3, KeyValue.makeCharKey('\\')),
           sk("x"), sk("c"), sk("v")));
     rows.add(mkrow(
@@ -782,8 +786,13 @@ public class Keyboard2View extends View
     rows.add(mkrow(sk("h"), sk("j"),
           sk("k").withKeyValue(3, KeyValue.makeCharKey('['))
                  .withKeyValue(4, KeyValue.makeCharKey(']')),
-          sk("l").withKeyValue(1, KeyValue.makeCharKey('|'))));
-    rows.add(mkrow(sk("b"), sk("n"), sk("m"),
+          // L is on the right edge — strip_outward removes the base layout's
+          // NE=| and SW=\ for us, so no manual modifiers needed.
+          sk("l")));
+    rows.add(mkrow(sk("b"), sk("n"),
+          // M: move ' (single quote) to NE; the base had it on SW.
+          sk("m").withKeyValue(2, KeyValue.makeCharKey('\''))
+                 .withKeyValue(3, null),
           sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete"))));
     // Right space bar: discrete arrow keys (DPAD) on all four swipe edges,
     // instead of the cursor slider (which the left space bar keeps).
@@ -866,15 +875,19 @@ public class Keyboard2View extends View
     }
   }
 
-  /** Remove swipe sub-keys that point toward a physical screen edge the key
-      sits against (hard to reach). [L/R/T/B] = adjacent to left/right/top/
-      bottom edge. */
+  /** Strip swipe sub-keys for keys on a physical screen edge. For L/R edge
+      keys, keep ONLY N (up) and S (down) — every other direction starts a
+      gesture from the very edge of the screen, which collides with Android's
+      back gesture (swipe in from edge) on devices that use one. The user
+      reaches modifiers on edge keys by swiping straight up or down.
+      [L/R/T/B] = adjacent to left/right/top/bottom edge. */
   private KeyboardData.Key strip_outward(KeyboardData.Key k, boolean L,
       boolean R, boolean T, boolean B)
   {
     boolean[] drop = new boolean[9]; // 1nw 2ne 3sw 4se 5w 6e 7n 8s
-    if (L) { drop[1] = drop[3] = drop[5] = true; }
-    if (R) { drop[2] = drop[4] = drop[6] = true; }
+    if (L || R) {
+      drop[1] = drop[2] = drop[3] = drop[4] = drop[5] = drop[6] = true;
+    }
     // Top/bottom not stripped: the blank strips keep those swipes reachable.
     for (int i = 1; i < 9; i++)
       if (drop[i] && k.keys[i] != null)
