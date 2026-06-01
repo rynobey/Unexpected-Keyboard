@@ -6,7 +6,9 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.graphics.RectF;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build.VERSION;
@@ -352,6 +354,11 @@ public class Keyboard2 extends InputMethodService
 
   private void updateSoftInputWindowLayoutParams() {
     final Window window = getWindow().getWindow();
+    // Make the IME window itself transparent so split-mode's central hole
+    // truly shows the app behind. The container LinearLayout has its own
+    // colorKeyboard background that covers this in non-split mode, so this
+    // doesn't visually affect normal landscape/portrait usage.
+    window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
     // On API >= 35, Keyboard2View behaves as edge-to-edge
     // APIs 30 to 34 have visual artifact when edge-to-edge is enabled
     if (VERSION.SDK_INT >= 35)
