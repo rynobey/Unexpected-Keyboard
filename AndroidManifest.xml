@@ -38,5 +38,13 @@
     <intent>
       <action android:name="android.view.InputMethod" />
     </intent>
+    <!-- To probe the focused app's manifest for the SUPPORTS_HOLE_LAYOUT
+         meta-data (auto-mode in the experimental split keyboard). Apps
+         opt in by declaring a (no-op) receiver with this action in their
+         own manifest, which makes them queryable to us under Android 11+
+         package-visibility rules. -->
+    <intent>
+      <action android:name="com.rynobey.uxk.HOLE_LAYOUT_CHANGED" />
+    </intent>
   </queries>
 </manifest>

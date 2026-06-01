@@ -352,13 +352,25 @@ public class Keyboard2 extends InputMethodService
     updateSoftInputWindowLayoutParams();
   }
 
+  /** Originals of window bg + chain bgs, saved on first split-mode entry
+      and restored on exit. Without scoping these changes to split mode,
+      the IME's surrounding system-panel area goes transparent for ALL
+      keyboard sessions — including non-split — which exposes black gaps
+      between the IME and the app behind. */
+  private Drawable _saved_window_bg = null;
+  private boolean _saved_window_bg_valid = false;
+  private final java.util.IdentityHashMap<View, Drawable> _saved_chain_bgs =
+      new java.util.IdentityHashMap<>();
+
   private void updateSoftInputWindowLayoutParams() {
     final Window window = getWindow().getWindow();
-    // Make the IME window itself transparent so split-mode's central hole
-    // truly shows the app behind. The container LinearLayout has its own
-    // colorKeyboard background that covers this in non-split mode, so this
-    // doesn't visually affect normal landscape/portrait usage.
-    window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+
+    if (split_active()) {
+      applyTransparencyForSplit(window);
+    } else {
+      restoreTransparencyAfterSplit(window);
+    }
+
     // On API >= 35, Keyboard2View behaves as edge-to-edge
     // APIs 30 to 34 have visual artifact when edge-to-edge is enabled
     if (VERSION.SDK_INT >= 35)
@@ -379,31 +391,48 @@ public class Keyboard2 extends InputMethodService
                     ? ViewGroup.LayoutParams.MATCH_PARENT
                     : ViewGroup.LayoutParams.WRAP_CONTENT);
     updateLayoutGravityOf((View) inputArea.getParent(), Gravity.BOTTOM);
-
-    // Clear the panel background painted by the system between the IME
-    // window and our keyboard container. Without this, even with the
-    // Window background set transparent (above) and the container's bg
-    // set alpha=0 (in refresh_config), the inputArea / its parent still
-    // paints grey from the system's IME theme — visible through the
-    // split-mode hole. Walking up from the container's parent leaves the
-    // LinearLayout below intact, so non-split mode still uses the
-    // colorKeyboard background.
-    clearBackgroundChainAboveContainer(window);
   }
 
-  /** Walk up from _keyboard_container_view's parent through the IME's
-      decor view, setting each level's background to null. */
-  private void clearBackgroundChainAboveContainer(Window window)
+  /** In split mode: save the original window + chain backgrounds (first
+      time only) and replace them with transparency so the central hole
+      can show the app behind. */
+  private void applyTransparencyForSplit(Window window)
   {
+    if (!_saved_window_bg_valid) {
+      _saved_window_bg = window.getDecorView().getBackground();
+      _saved_window_bg_valid = true;
+    }
+    window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+
     if (_keyboard_container_view == null) return;
     final View decor = window.getDecorView();
     ViewParent p = _keyboard_container_view.getParent();
     while (p instanceof View)
     {
       View pv = (View) p;
+      if (!_saved_chain_bgs.containsKey(pv)) {
+        _saved_chain_bgs.put(pv, pv.getBackground());
+      }
       pv.setBackground(null);
       if (pv == decor) break;
       p = pv.getParent();
+    }
+  }
+
+  /** In non-split mode: restore the originals we saved, so normal keyboard
+      sessions look the way the system theme intended. */
+  private void restoreTransparencyAfterSplit(Window window)
+  {
+    if (_saved_window_bg_valid) {
+      window.setBackgroundDrawable(_saved_window_bg);
+      _saved_window_bg = null;
+      _saved_window_bg_valid = false;
+    }
+    if (!_saved_chain_bgs.isEmpty()) {
+      for (java.util.Map.Entry<View, Drawable> e : _saved_chain_bgs.entrySet()) {
+        e.getKey().setBackground(e.getValue());
+      }
+      _saved_chain_bgs.clear();
     }
   }
 
