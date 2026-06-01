@@ -797,7 +797,7 @@ public class Keyboard2View extends View
       int k = (int)((_cutout_rect.centerY() - y0) / bandH);
       if (k >= 0 && k < R)
       {
-        float g = bandH * 0.4f, minH = bandH * 0.55f;
+        float g = bandH * 0.2f, minH = bandH * 0.55f;
         boolean canUp = k > 0, canDown = k + 1 < R;
         boolean preferDown = _cutout_rect.centerY() < (bnd[k] + bnd[k + 1]) / 2f;
         boolean down = canDown && (preferDown || !canUp);
@@ -996,13 +996,30 @@ public class Keyboard2View extends View
           Paint p = tc_key.label_paint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
               labelColor(kv, down, false), tk.labelSize);
           p.setTextAlign(Paint.Align.CENTER);
-          // If the camera cutout sits over this key's label, nudge it clear.
-          float lblx = tk.cx;
-          if (_has_cutout && _cutout_rect.contains(tk.cx, tk.cy))
-            lblx = _cutout_left ? _cutout_rect.right + tk.labelSize * 0.6f
-                                : _cutout_rect.left - tk.labelSize * 0.6f;
+          // If the camera cutout sits over this key, move the label into the
+          // clear area above (or below) the hole so the letter stays visible.
+          float lblx = tk.cx, lbly = tk.cy;
+          if (_has_cutout)
+          {
+            float kxMin = tk.xs[0], kxMax = tk.xs[0], kyMin = tk.ys[0], kyMax = tk.ys[0];
+            for (int v = 1; v < tk.xs.length; v++)
+            {
+              kxMin = Math.min(kxMin, tk.xs[v]); kxMax = Math.max(kxMax, tk.xs[v]);
+              kyMin = Math.min(kyMin, tk.ys[v]); kyMax = Math.max(kyMax, tk.ys[v]);
+            }
+            float hcy = _cutout_rect.centerY();
+            boolean overlaps = kxMin <= _cutout_rect.right && kxMax >= _cutout_rect.left
+                && kyMin <= hcy && kyMax >= hcy;
+            if (overlaps)
+            {
+              float aboveH = _cutout_rect.top - kyMin;
+              float belowH = kyMax - _cutout_rect.bottom;
+              lbly = (aboveH >= belowH) ? (kyMin + _cutout_rect.top) / 2f
+                                        : (_cutout_rect.bottom + kyMax) / 2f;
+            }
+          }
           canvas.drawText(kv.getString(), lblx,
-              tk.cy - (p.ascent() + p.descent()) / 2f, p);
+              lbly - (p.ascent() + p.descent()) / 2f, p);
         }
       }
       // Swipe sub-keys: only on corners that aren't on a physical screen edge.
