@@ -530,7 +530,9 @@ public class Keyboard2View extends View
   {
     if (_split)
     {
-      drawCenterTestArea(canvas);
+      // No drawCenterTestArea — the hole must be fully transparent so the
+      // compatible app behind shows through. (The test-area overlay was a
+      // development-time placeholder before real receivers existed.)
       drawSplitTriangles(canvas);
       return;
     }

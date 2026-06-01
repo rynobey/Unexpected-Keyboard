@@ -75,7 +75,7 @@
                     android:defaultValue="auto"/>
     <juloo.keyboard2.prefs.IntSlideBarPreference android:key="split_center_ratio"
                                                   android:title="@string/pref_split_center_ratio_title"
-                                                  android:summary="@string/pref_split_center_ratio_summary"
+                                                  android:summary="%s%%"
                                                   android:defaultValue="60"
                                                   min="30"
                                                   max="80"/>

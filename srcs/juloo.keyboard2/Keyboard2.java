@@ -293,9 +293,12 @@ public class Keyboard2 extends InputMethodService
       _clipboard_pane = null;
       setInputView(_keyboard_container_view);
     }
-    // Set keyboard background opacity
+    // Set keyboard background opacity. In split mode the container must be
+    // transparent so the app behind shows through the central hole.
+    // setAlpha is reversible (the colorKeyboard drawable stays attached),
+    // so the next non-split session restores the normal opacity.
     Drawable bg = _keyboard_container_view.getBackground().mutate();
-    bg.setAlpha(_config.keyboardOpacity);
+    bg.setAlpha(split_active() ? 0 : _config.keyboardOpacity);
     _keyboard_container_view.setBackground(bg);
     _keyboard_layout_view.reset();
     refresh_candidates_view();
