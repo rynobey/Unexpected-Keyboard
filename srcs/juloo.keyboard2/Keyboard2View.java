@@ -1276,7 +1276,7 @@ public class Keyboard2View extends View
         if (kv != null)
         {
           Paint p = tc_key.label_paint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-              labelColor(kv, down, false), tk.labelSize * _config.main_label_scale);
+              labelColor(kv, down, false), tk.labelSize * _config.split_main_label_scale);
           p.setTextAlign(Paint.Align.CENTER);
           // If the camera cutout sits over this key, move the label into the
           // clear area above (or below) the hole so the letter stays visible.
@@ -1335,7 +1335,7 @@ public class Keyboard2View extends View
         float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.5f;
         float ay = tk.ys[i] + (tk.cy - tk.ys[i]) * 0.32f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-            labelColor(sk, down, true), tk.labelSize * 0.78f * _config.sublabel_scale,
+            labelColor(sk, down, true), tk.labelSize * 0.78f * _config.split_sublabel_scale,
             Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }
@@ -1360,7 +1360,7 @@ public class Keyboard2View extends View
         float ax = mx + (tk.cx - mx) * 0.30f;
         float ay = my + (tk.cy - my) * 0.30f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-            labelColor(sk, down, true), tk.labelSize * 0.78f * _config.sublabel_scale,
+            labelColor(sk, down, true), tk.labelSize * 0.78f * _config.split_sublabel_scale,
             Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }

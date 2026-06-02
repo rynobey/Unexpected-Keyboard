@@ -66,7 +66,7 @@
     <string name="pref_split_cutout_adapt_summary">Grow the key under the selfie-camera lens and move its label clear of the hole</string>
     <string name="pref_custom_swipes_title">Custom swipe keys</string>
     <string name="pref_custom_swipes_summary">Override the swipe-direction symbols on individual keys of the split keyboard</string>
-    <string name="pref_custom_swipes_dialog_hint">Center: the key to modify (e.g. \'q\', \'space\'). Around it: the key for each swipe direction. Leave a field empty to keep the default, or enter \'none\' to remove the default.</string>
+    <string name="pref_custom_swipes_dialog_hint">Center field: the key to modify (e.g. \'q\', \'space\', \'shift\').\nSurrounding fields: the symbol for each swipe direction.\n\n• empty = keep the default symbol\n• none = remove the default symbol</string>
     <string name="custom_swipes_key">key</string>
     <string name="custom_swipes_nw">↖</string>
     <string name="custom_swipes_n">↑</string>
@@ -94,9 +94,11 @@
     <string name="pref_horizontal_margin_title">Horizontal margin</string>
     <string name="pref_character_size_title">Label size</string>
     <string name="pref_character_size_summary">Size of characters displayed on the keyboard (%.2fx)</string>
-    <string name="pref_main_label_size_title">Main symbol size</string>
+    <string name="pref_main_label_size_title">Main symbol size (normal keyboard)</string>
+    <string name="pref_split_main_label_size_title">Split mode main symbol size</string>
+    <string name="pref_split_swipe_symbol_size_title">Split mode swipe symbol size</string>
     <string name="pref_main_label_size_summary">Extra scaling of the main key symbols (%.2fx)</string>
-    <string name="pref_swipe_symbol_size_title">Swipe symbol size</string>
+    <string name="pref_swipe_symbol_size_title">Swipe symbol size (normal keyboard)</string>
     <string name="pref_swipe_symbol_size_summary">Extra scaling of the secondary swipe symbols (%.2fx)</string>
     <string name="pref_theme">Theme</string>
     <string name="pref_theme_e_system">System settings</string>

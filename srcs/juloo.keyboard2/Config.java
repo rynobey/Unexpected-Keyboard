@@ -107,10 +107,16 @@ public final class Config
       [KeyboardData.Key.keys]; null slots keep the default, the REMOVED
       placeholder clears the slot. */
   public Map<KeyValue, KeyValue[]> custom_swipes;
-  /** Scale applied to the main key labels, on top of [characterSize]. */
+  /** Scale applied to the main key labels of the normal (non-split)
+      keyboard, on top of [characterSize]. */
   public float main_label_scale;
-  /** Scale applied to the secondary swipe-symbol labels. */
+  /** Scale applied to the secondary swipe-symbol labels of the normal
+      (non-split) keyboard. */
   public float sublabel_scale;
+  /** Same as [main_label_scale]/[sublabel_scale] but for the split-mode
+      keyboard, adjustable independently. */
+  public float split_main_label_scale;
+  public float split_sublabel_scale;
 
   /** Manifest meta-data key. Compatible apps opt in by declaring this on
       their <application> tag:
@@ -257,6 +263,8 @@ public final class Config
     custom_swipes = CustomKeySwipesPreference.get(_prefs);
     main_label_scale = _prefs.getFloat("main_label_size", 1.f);
     sublabel_scale = _prefs.getFloat("swipe_symbol_size", 1.f);
+    split_main_label_scale = _prefs.getFloat("split_main_label_size", 1.f);
+    split_sublabel_scale = _prefs.getFloat("split_swipe_symbol_size", 1.f);
 
     float screen_width_dp = dm.widthPixels / dm.density;
     wide_screen = screen_width_dp >= WIDE_DEVICE_THRESHOLD;
