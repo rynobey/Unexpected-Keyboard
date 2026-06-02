@@ -85,5 +85,11 @@
                                                   android:defaultValue="100"
                                                   min="30"
                                                   max="100"/>
+    <ListPreference android:key="split_variant"
+                    android:title="@string/pref_split_variant_title"
+                    android:summary="@string/pref_split_variant_summary"
+                    android:entries="@array/pref_split_variant_entries"
+                    android:entryValues="@array/pref_split_variant_values"
+                    android:defaultValue="rows"/>
   </PreferenceCategory>
 </PreferenceScreen>

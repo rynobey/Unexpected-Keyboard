@@ -144,4 +144,12 @@
     <item>always</item>
     <item>off</item>
   </string-array>
+  <string-array name="pref_split_variant_entries">
+    <item>@string/pref_split_variant_rows</item>
+    <item>@string/pref_split_variant_columns</item>
+  </string-array>
+  <string-array name="pref_split_variant_values">
+    <item>rows</item>
+    <item>columns</item>
+  </string-array>
 </resources>

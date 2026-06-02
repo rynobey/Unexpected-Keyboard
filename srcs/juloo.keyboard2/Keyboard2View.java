@@ -589,21 +589,44 @@ public class Keyboard2View extends View
     // Leave a blank strip above and below the keys.
     float top = _split_top;
     float bottom = _split_bottom;
-    // Dedicated QWERTY split layout (number row on top, modifiers at the
-    // bottom, esc/tab/fn as swipe modifiers).
-    ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_layout_left();
-    ArrayList<ArrayList<KeyboardData.Key>> rightRows = split_layout_right();
-    // A single label size for every key, based on the (uniform) band height.
-    int rowCount = Math.max(leftRows.size(), rightRows.size());
-    _split_label_size = (bottom - top) / Math.max(1, rowCount) * 0.20f;
+
     float density = getResources().getDisplayMetrics().density;
     _split_gap_px = density * 1.5f;
     _round_effect = new CornerPathEffect(density * 2f);
     compute_cutout(viewW);
     _tri_border_paint.setStyle(Paint.Style.STROKE);
-    _tri_border_paint.setStrokeWidth(
-        Math.max(2f, getResources().getDisplayMetrics().density * 1.5f));
+    _tri_border_paint.setStrokeWidth(Math.max(2f, density * 1.5f));
     _tri_border_paint.setColor(_theme.colorKeyActivated);
+
+    if ("columns".equals(_config.split_variant))
+    {
+      // Columnar variant: each original QWERTY row becomes a vertical
+      // column for wider, thumb-friendlier keys. Bottom modifier strip
+      // (ctrl/alt/space on left, space/enter on right) stays a horizontal
+      // row at the bottom of each half.
+      float bottomRowH = (bottom - top) * 0.18f; // ~1/5 of letter area
+      float lettersBottom = bottom - bottomRowH;
+      ArrayList<ArrayList<KeyboardData.Key>> leftCols = split_layout_left_columns();
+      ArrayList<ArrayList<KeyboardData.Key>> rightCols = split_layout_right_columns();
+      int maxColLen = 0;
+      for (ArrayList<KeyboardData.Key> col : leftCols)  maxColLen = Math.max(maxColLen, col.size());
+      for (ArrayList<KeyboardData.Key> col : rightCols) maxColLen = Math.max(maxColLen, col.size());
+      _split_label_size = (lettersBottom - top) / Math.max(1, maxColLen) * 0.20f;
+      tessellateColumns(0f, top, _center_rect.left, lettersBottom, 0f, leftCols);
+      tessellateColumns(_center_rect.right, top, viewW, lettersBottom, viewW, rightCols);
+      // Bottom modifier row, one per half, laid out as add_rect_row.
+      add_rect_row(split_bottom_left(),  0f,  lettersBottom, _center_rect.left, bottom,
+                   lettersBottom, bottom, top, bottom, 0f, true, false, true);
+      add_rect_row(split_bottom_right(), _center_rect.right, lettersBottom, viewW, bottom,
+                   lettersBottom, bottom, top, bottom, viewW, false, false, true);
+      return;
+    }
+
+    // Original "rows" variant.
+    ArrayList<ArrayList<KeyboardData.Key>> leftRows = split_layout_left();
+    ArrayList<ArrayList<KeyboardData.Key>> rightRows = split_layout_right();
+    int rowCount = Math.max(leftRows.size(), rightRows.size());
+    _split_label_size = (bottom - top) / Math.max(1, rowCount) * 0.20f;
     // Outer side fills to the screen edge (0 on the left, viewW on the right).
     tessellateRows(0f, top, _center_rect.left, bottom, 0f, leftRows);
     tessellateRows(_center_rect.right, top, viewW, bottom, viewW, rightRows);
@@ -806,6 +829,153 @@ public class Keyboard2View extends View
     return rows;
   }
 
+  // ───────────────────────────── columns variant ─────────────────────────────
+
+  /** Like [sk] but keeps the base layout's full swipe set including
+      digit/shift-number-symbol swipes — used by the columns variant
+      where there's no separate number row to take those. */
+  private KeyboardData.Key skd(String name)
+  {
+    KeyValue kv = KeyValue.getKeyByName(name);
+    if (_keyboard != null)
+    {
+      KeyboardData.Key k = _keyboard.findKeyWithValue(kv);
+      if (k != null && k.keys[0] != null && k.keys[0].sameKey(kv))
+        return k;
+    }
+    return KeyboardData.Key.EMPTY.withKeyValue(0, kv);
+  }
+
+  /** Left half — columnar variant. Vertical-axis mirror of the obvious
+      arrangement so Shift sits at the outer (left screen) edge and Q
+      at the inner (centre) edge. */
+  private ArrayList<ArrayList<KeyboardData.Key>> split_layout_left_columns()
+  {
+    ArrayList<ArrayList<KeyboardData.Key>> cols =
+        new ArrayList<ArrayList<KeyboardData.Key>>();
+    // Outer column: shift, z, x, c, v. Tab moved to N (swipe up) on
+    // shift to avoid the back-gesture conflict on left-edge keys.
+    cols.add(mkrow(
+          skd("shift").withKeyValue(7, KeyValue.getKeyByName("tab")),
+          skd("z").withKeyValue(3, KeyValue.makeCharKey('\\')),
+          skd("x"),
+          skd("c"),
+          skd("v")));
+    // Middle column: a, s, d, f, g
+    cols.add(mkrow(skd("a"), skd("s"), skd("d"), skd("f"), skd("g")));
+    // Inner column: q, w, e, r, t. Q gets esc on N (was NE for rows
+    // variant — N is harmless for the inner column too).
+    cols.add(mkrow(
+          skd("q").withKeyValue(7, KeyValue.getKeyByName("esc")),
+          skd("w").withKeyValue(1, KeyValue.makeCharKey('~')),
+          skd("e"),
+          skd("r"),
+          skd("t")));
+    return cols;
+  }
+
+  /** Right half — columnar variant. Horizontal-axis mirror of the
+      letter columns (each reversed top↔bottom). Bottom modifier strip
+      is laid out separately and stays at the bottom. */
+  private ArrayList<ArrayList<KeyboardData.Key>> split_layout_right_columns()
+  {
+    ArrayList<ArrayList<KeyboardData.Key>> cols =
+        new ArrayList<ArrayList<KeyboardData.Key>>();
+    // Inner column (closest to centre hole): p o i u y (top→bottom,
+    // reversed from natural y/u/i/o/p — the horizontal-axis mirror).
+    cols.add(mkrow(skd("p"), skd("o"), skd("i"), skd("u"), skd("y")));
+    // Middle column: l k j h (reversed h/j/k/l).
+    cols.add(mkrow(
+          skd("l"),
+          skd("k").withKeyValue(3, KeyValue.makeCharKey('['))
+                  .withKeyValue(4, KeyValue.makeCharKey(']')),
+          skd("j"),
+          skd("h")));
+    // Outer column (right screen edge): backspace m n b (reversed
+    // b/n/m/backspace).
+    cols.add(mkrow(
+          skd("backspace").withKeyValue(1, KeyValue.getKeyByName("delete")),
+          skd("m").withKeyValue(2, KeyValue.makeCharKey('\''))
+                  .withKeyValue(3, KeyValue.makeCharKey('.')),
+          skd("n"),
+          skd("b")));
+    return cols;
+  }
+
+  /** Bottom modifier strip — left half. Same content as the rows-variant
+      last row, but used by the columns variant as a separate horizontal
+      strip beneath the letter columns. */
+  private ArrayList<KeyboardData.Key> split_bottom_left()
+  {
+    return mkrow(
+        sk("ctrl", 2, "fn").withKeyValue(4, null),
+        sk("alt").withKeyValue(1, KeyValue.getKeyByName("config"))
+                 .withKeyValue(2, KeyValue.getKeyByName("change_method")),
+        sk("space").withKeyValue(2, KeyValue.getKeyByName("switch_numeric")));
+  }
+
+  /** Bottom modifier strip — right half. */
+  private ArrayList<KeyboardData.Key> split_bottom_right()
+  {
+    return mkrow(
+        sk("space").withKeyValue(5, KeyValue.getKeyByName("left"))
+                   .withKeyValue(6, KeyValue.getKeyByName("right"))
+                   .withKeyValue(7, KeyValue.getKeyByName("up"))
+                   .withKeyValue(8, KeyValue.getKeyByName("down")),
+        sk("enter").withKeyValue(1, KeyValue.getKeyByName("action").withSymbol("act")));
+  }
+
+  /** Tessellate [columns] as vertical strips filling [x0,y0,x1,y1].
+      Each column is one strip of equal width; its keys are rectangles
+      spaced evenly down its height. The outer column (touching the
+      screen edge) gets the cutout-grow treatment for the key sitting at
+      the cutout's y. */
+  private void tessellateColumns(float x0, float y0, float x1, float y1,
+      float outerX, ArrayList<ArrayList<KeyboardData.Key>> columns)
+  {
+    int C = columns.size();
+    if (C <= 0 || x1 <= x0 || y1 <= y0)
+      return;
+    float colW = (x1 - x0) / C;
+    boolean left_half = outerX <= 0f;
+    for (int ci = 0; ci < C; ci++)
+    {
+      ArrayList<KeyboardData.Key> col = columns.get(ci);
+      int K = col.size();
+      if (K <= 0)
+        continue;
+      float cx0 = x0 + ci * colW;
+      float cx1 = cx0 + colW;
+      boolean outerCol = left_half ? (ci == 0) : (ci == C - 1);
+      float keyH = (y1 - y0) / K;
+      float[] bnd = new float[K + 1];
+      for (int i = 0; i <= K; i++) bnd[i] = y0 + i * keyH;
+      float[] obnd = bnd.clone();
+      if (outerCol && _has_cutout && _cutout_left == left_half)
+      {
+        int k = (int)((_cutout_rect.centerY() - y0) / keyH);
+        if (k >= 0 && k < K)
+        {
+          float g = keyH * 0.15f, minH = keyH * 0.55f;
+          if (k > 0)
+            obnd[k]     = Math.max(bnd[k - 1] + minH, bnd[k] - g);
+          if (k + 1 < K)
+            obnd[k + 1] = Math.min(bnd[k + 2] - minH, bnd[k + 1] + g);
+        }
+      }
+      for (int ki = 0; ki < K; ki++)
+      {
+        boolean L = outerCol && left_half;
+        boolean R = outerCol && !left_half;
+        boolean T = (ki == 0);
+        boolean B = (ki == K - 1);
+        float ky0 = outerCol ? obnd[ki]     : bnd[ki];
+        float ky1 = outerCol ? obnd[ki + 1] : bnd[ki + 1];
+        add_split_rect(col.get(ki), cx0, ky0, cx1, ky1, y0, y1, outerX, L, R, T, B);
+      }
+    }
+  }
+
   /** Lay out [rows] as horizontal bands (top to bottom) filling [x0,y0,x1,y1].
       Each band packs its keys left to right as diagonal-split triangle pairs,
       alternating the diagonal so the keys interleave. [outerX] is the physical
@@ -876,23 +1046,34 @@ public class Keyboard2View extends View
     }
   }
 
-  /** Strip swipe sub-keys for keys on a physical screen edge. For L/R edge
-      keys, keep ONLY N (up) and S (down) — every other direction starts a
-      gesture from the very edge of the screen, which collides with Android's
-      back gesture (swipe in from edge) on devices that use one. The user
-      reaches modifiers on edge keys by swiping straight up or down.
+  /** For keys on a physical L/R screen edge, consolidate the corner/
+      horizontal swipes onto N (slot 7) and S (slot 8) instead of just
+      dropping them. NW/NE swipes promote to N (with NE preferred), SW/SE
+      promote to S (SW preferred). Pre-existing N/S take priority over a
+      promoted corner. This way edge keys keep ALL their secondaries
+      reachable — comma on V, full stop on C/M, esc on Q, etc. — without
+      starting any swipe from a screen edge (which would collide with
+      Android's back gesture). W/E have no vertical home and are dropped.
       [L/R/T/B] = adjacent to left/right/top/bottom edge. */
   private KeyboardData.Key strip_outward(KeyboardData.Key k, boolean L,
       boolean R, boolean T, boolean B)
   {
-    boolean[] drop = new boolean[9]; // 1nw 2ne 3sw 4se 5w 6e 7n 8s
-    if (L || R) {
-      drop[1] = drop[2] = drop[3] = drop[4] = drop[5] = drop[6] = true;
-    }
-    // Top/bottom not stripped: the blank strips keep those swipes reachable.
-    for (int i = 1; i < 9; i++)
-      if (drop[i] && k.keys[i] != null)
-        k = k.withKeyValue(i, null);
+    if (!(L || R)) return k;
+    KeyValue keep_n = k.keys[7];
+    if (keep_n == null) keep_n = k.keys[2];   // NE
+    if (keep_n == null) keep_n = k.keys[1];   // NW
+    KeyValue keep_s = k.keys[8];
+    if (keep_s == null) keep_s = k.keys[3];   // SW
+    if (keep_s == null) keep_s = k.keys[4];   // SE
+    // Avoid duplicating the same KV on both directions (e.g. Q with
+    // N=esc set manually AND base SE=esc would otherwise promote esc
+    // onto S as well).
+    if (keep_n != null && keep_s != null && keep_s.sameKey(keep_n))
+      keep_s = null;
+    for (int i = 1; i <= 6; i++)
+      if (k.keys[i] != null) k = k.withKeyValue(i, null);
+    if (keep_n != null && k.keys[7] == null) k = k.withKeyValue(7, keep_n);
+    if (keep_s != null && k.keys[8] == null) k = k.withKeyValue(8, keep_s);
     return k;
   }
 
@@ -1039,8 +1220,16 @@ public class Keyboard2View extends View
           p.setTextAlign(Paint.Align.CENTER);
           // If the camera cutout sits over this key, move the label into the
           // clear area above (or below) the hole so the letter stays visible.
+          // Only consider outer-column keys (i.e. those with a vertex on the
+          // physical screen edge) — inner-column keys can overlap the
+          // cutout's x range geometrically (e.g. S/D in the A row, K in the
+          // L row) without actually being occluded by it, since the cutout
+          // sits at the screen edge over the outer key.
           float lblx = tk.cx, lbly = tk.cy;
-          if (_has_cutout)
+          boolean onOuterEdge = false;
+          for (int v = 0; v < tk.onEdge.length; v++)
+            if (tk.onEdge[v]) { onOuterEdge = true; break; }
+          if (_has_cutout && onOuterEdge)
           {
             float kxMin = tk.xs[0], kxMax = tk.xs[0], kyMin = tk.ys[0], kyMax = tk.ys[0];
             for (int v = 1; v < tk.xs.length; v++)

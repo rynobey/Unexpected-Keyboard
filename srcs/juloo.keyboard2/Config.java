@@ -88,6 +88,10 @@ public final class Config
       the keyboard symmetrically (gaps growing above and below). Loaded
       from a 30..100 percent SeekBar preference. */
   public float split_height_ratio;
+  /** Which split-keyboard layout to use: "rows" (the original 5×5-ish
+      QWERTY shape) or "columns" (each original QWERTY row becomes a
+      vertical column for wider, thumb-friendlier keys). */
+  public String split_variant;
 
   /** Manifest meta-data key. Compatible apps opt in by declaring this on
       their <application> tag:
@@ -228,6 +232,7 @@ public final class Config
     split_mode = _prefs.getString("split_mode", "auto");
     split_center_ratio = _prefs.getInt("split_center_ratio", 60) / 100f;
     split_height_ratio = _prefs.getInt("split_height_ratio", 100) / 100f;
+    split_variant = _prefs.getString("split_variant", "rows");
 
     float screen_width_dp = dm.widthPixels / dm.density;
     wide_screen = screen_width_dp >= WIDE_DEVICE_THRESHOLD;

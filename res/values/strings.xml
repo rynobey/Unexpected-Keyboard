@@ -57,6 +57,10 @@
     <string name="pref_split_center_ratio_summary">Percentage of screen width reserved for the transparent center area</string>
     <string name="pref_split_height_ratio_title">Split mode keyboard height (%)</string>
     <string name="pref_split_height_ratio_summary">Percentage of available vertical space taken by the split keyboard. Lower values shrink the keys and leave transparent gaps above and below.</string>
+    <string name="pref_split_variant_title">Split mode layout variant</string>
+    <string name="pref_split_variant_summary">Rows = original 5×5 QWERTY shape. Columns = each QWERTY row becomes a vertical column for wider, thumb-friendlier keys.</string>
+    <string name="pref_split_variant_rows">Rows (original)</string>
+    <string name="pref_split_variant_columns">Columns (rotated)</string>
     <string name="pref_autocapitalisation_title">Automatic capitalisation</string>
     <string name="pref_autocapitalisation_summary">Press Shift at the beginning of a sentence</string>
     <string name="pref_change_method_key_replacement_title">Switching between input methods</string>
