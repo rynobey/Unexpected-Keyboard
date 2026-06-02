@@ -831,6 +831,18 @@ public class Keyboard2View extends View
 
   // ───────────────────────────── columns variant ─────────────────────────────
 
+  /** Move slot [from] to slot [to]. If [to] is occupied, swap the two
+      so the existing value isn't lost. No-op if [from] is empty. */
+  private KeyboardData.Key move_or_swap(KeyboardData.Key k, int from, int to)
+  {
+    KeyValue v = k.keys[from];
+    if (v == null) return k;
+    KeyValue existing = k.keys[to];
+    k = k.withKeyValue(to, v);
+    k = k.withKeyValue(from, existing);
+    return k;
+  }
+
   /** Like [sk] but keeps the base layout's full swipe set including
       digit/shift-number-symbol swipes — used by the columns variant
       where there's no separate number row to take those. */
@@ -846,71 +858,87 @@ public class Keyboard2View extends View
     return KeyboardData.Key.EMPTY.withKeyValue(0, kv);
   }
 
-  /** Left half — columnar variant. Vertical-axis mirror of the obvious
-      arrangement so Shift sits at the outer (left screen) edge and Q
-      at the inner (centre) edge. */
+  /** Left half — columnar variant. 3 columns × 5 keys; Shift moved from
+      the top of the outer column to the bottom of the outer column (its
+      former top-of-column slot is taken by Z so Z..V slide up). The
+      bottom row is replaced with a dedicated Tab + Space pair. */
   private ArrayList<ArrayList<KeyboardData.Key>> split_layout_left_columns()
   {
     ArrayList<ArrayList<KeyboardData.Key>> cols =
         new ArrayList<ArrayList<KeyboardData.Key>>();
-    // Outer column: shift, z, x, c, v. Tab moved to N (swipe up) on
-    // shift to avoid the back-gesture conflict on left-edge keys.
+    // Outer column (left screen edge): z, x, c, v, shift. ESC lives only
+    // on X's N now (was on Z's S — moved).
     cols.add(mkrow(
-          skd("shift").withKeyValue(7, KeyValue.getKeyByName("tab")),
-          skd("z").withKeyValue(3, KeyValue.makeCharKey('\\')),
-          skd("x"),
+          skd("z").withKeyValue(7, KeyValue.makeCharKey('\\')),
+          skd("x").withKeyValue(2, null) // clear base loc † on NE
+                  .withKeyValue(7, KeyValue.getKeyByName("esc")),
           skd("c"),
-          skd("v")));
-    // Middle column: a, s, d, f, g
-    cols.add(mkrow(skd("a"), skd("s"), skd("d"), skd("f"), skd("g")));
-    // Inner column: q, w, e, r, t. Q gets esc on N (was NE for rows
-    // variant — N is harmless for the inner column too).
+          skd("v"),
+          skd("shift")));
+    // Middle column: a, s, d, f, g. Tab removed from A's NW (dedicated
+    // Tab key in the bottom row now).
     cols.add(mkrow(
-          skd("q").withKeyValue(7, KeyValue.getKeyByName("esc")),
-          skd("w").withKeyValue(1, KeyValue.makeCharKey('~')),
-          skd("e"),
-          skd("r"),
-          skd("t")));
+          skd("a").withKeyValue(1, null),
+          skd("s"),
+          skd("d"),
+          skd("f"),
+          skd("g")));
+    // Inner column: q, w, e, r, t. Digits moved NE→SE on each. E already
+    // had loc € on SE — swap so € is preserved (moves to NE). Q's base
+    // SE=loc esc cleared first so the swap doesn't carry it.
+    cols.add(mkrow(
+          move_or_swap(skd("q").withKeyValue(4, null), 2, 4),
+          move_or_swap(skd("w"), 2, 4),
+          move_or_swap(skd("e"), 2, 4),
+          move_or_swap(skd("r"), 2, 4),
+          move_or_swap(skd("t"), 2, 4)));
     return cols;
   }
 
-  /** Right half — columnar variant. Horizontal-axis mirror of the
-      letter columns (each reversed top↔bottom). Bottom modifier strip
-      is laid out separately and stays at the bottom. */
+  /** Right half — columnar variant. 3 columns × 5 keys. Backspace moved
+      off the top of the outer column down into the new bottom slot,
+      with Ctrl below it. Alt is added at the bottom of the middle column.
+      The 5-key columns put the camera cutout on a key boundary so no
+      key needs to grow to clear it. */
   private ArrayList<ArrayList<KeyboardData.Key>> split_layout_right_columns()
   {
     ArrayList<ArrayList<KeyboardData.Key>> cols =
         new ArrayList<ArrayList<KeyboardData.Key>>();
-    // Inner column (closest to centre hole): p o i u y (top→bottom,
-    // reversed from natural y/u/i/o/p — the horizontal-axis mirror).
-    cols.add(mkrow(skd("p"), skd("o"), skd("i"), skd("u"), skd("y")));
-    // Middle column: l k j h (reversed h/j/k/l).
+    // Inner column (closest to centre hole): p, o, i, u, y. Digits moved
+    // NE→SW on each. O/I/U/Y already had a symbol on SW (parens, asterisk,
+    // ampersand, caret); swap so those are preserved on NE.
+    cols.add(mkrow(
+          move_or_swap(skd("p"), 2, 3),
+          move_or_swap(skd("o"), 2, 3),
+          move_or_swap(skd("i"), 2, 3),
+          move_or_swap(skd("u"), 2, 3),
+          move_or_swap(skd("y"), 2, 3)));
+    // Middle column: l, k, j, h, alt
     cols.add(mkrow(
           skd("l"),
           skd("k").withKeyValue(3, KeyValue.makeCharKey('['))
                   .withKeyValue(4, KeyValue.makeCharKey(']')),
           skd("j"),
-          skd("h")));
-    // Outer column (right screen edge): backspace m n b (reversed
-    // b/n/m/backspace).
+          skd("h"),
+          sk("alt").withKeyValue(1, KeyValue.getKeyByName("config"))
+                   .withKeyValue(2, KeyValue.getKeyByName("change_method"))));
+    // Outer column (right screen edge): m, n, b, backspace, ctrl
     cols.add(mkrow(
-          skd("backspace").withKeyValue(1, KeyValue.getKeyByName("delete")),
           skd("m").withKeyValue(2, KeyValue.makeCharKey('\''))
                   .withKeyValue(3, KeyValue.makeCharKey('.')),
           skd("n"),
-          skd("b")));
+          skd("b"),
+          sk("backspace").withKeyValue(1, KeyValue.getKeyByName("delete")),
+          sk("ctrl", 2, "fn").withKeyValue(4, null)));
     return cols;
   }
 
-  /** Bottom modifier strip — left half. Same content as the rows-variant
-      last row, but used by the columns variant as a separate horizontal
-      strip beneath the letter columns. */
+  /** Bottom strip — left half. A dedicated Tab key plus Space (with
+      switch_numeric on NE). Replaces the previous Ctrl+Alt+Space. */
   private ArrayList<KeyboardData.Key> split_bottom_left()
   {
     return mkrow(
-        sk("ctrl", 2, "fn").withKeyValue(4, null),
-        sk("alt").withKeyValue(1, KeyValue.getKeyByName("config"))
-                 .withKeyValue(2, KeyValue.getKeyByName("change_method")),
+        sk("tab"),
         sk("space").withKeyValue(2, KeyValue.getKeyByName("switch_numeric")));
   }
 
