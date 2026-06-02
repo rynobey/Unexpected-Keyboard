@@ -11,6 +11,7 @@ import java.util.Map;
 import juloo.cdict.Cdict;
 import juloo.keyboard2.dict.Dictionaries;
 import juloo.keyboard2.prefs.CustomExtraKeysPreference;
+import juloo.keyboard2.prefs.CustomKeySwipesPreference;
 import juloo.keyboard2.prefs.ExtraKeysPreference;
 import juloo.keyboard2.prefs.LayoutsPreference;
 
@@ -92,6 +93,24 @@ public final class Config
       QWERTY shape) or "columns" (each original QWERTY row becomes a
       vertical column for wider, thumb-friendlier keys). */
   public String split_variant;
+  /** Vertical offset of the split-mode key area as a fraction of the
+      available vertical space. Positive shifts the keyboard up, negative
+      down. Only has an effect when [split_height_ratio] < 1 (the shift is
+      clamped to the free space left by the height setting). Loaded from a
+      -35..35 percent SeekBar preference. */
+  public float split_vertical_offset;
+  /** Whether split-mode keys adapt to a selfie-camera cutout (the lens key
+      grows and its label moves clear of the hole). */
+  public boolean split_cutout_adapt;
+  /** Per-key swipe-direction overrides for the split-mode layout. Maps a
+      key's center value to a 9-slot array indexed like
+      [KeyboardData.Key.keys]; null slots keep the default, the REMOVED
+      placeholder clears the slot. */
+  public Map<KeyValue, KeyValue[]> custom_swipes;
+  /** Scale applied to the main key labels, on top of [characterSize]. */
+  public float main_label_scale;
+  /** Scale applied to the secondary swipe-symbol labels. */
+  public float sublabel_scale;
 
   /** Manifest meta-data key. Compatible apps opt in by declaring this on
       their <application> tag:
@@ -233,6 +252,11 @@ public final class Config
     split_center_ratio = _prefs.getInt("split_center_ratio", 60) / 100f;
     split_height_ratio = _prefs.getInt("split_height_ratio", 100) / 100f;
     split_variant = _prefs.getString("split_variant", "rows");
+    split_vertical_offset = _prefs.getInt("split_vertical_offset", 0) / 100f;
+    split_cutout_adapt = _prefs.getBoolean("split_cutout_adapt", true);
+    custom_swipes = CustomKeySwipesPreference.get(_prefs);
+    main_label_scale = _prefs.getFloat("main_label_size", 1.f);
+    sublabel_scale = _prefs.getFloat("swipe_symbol_size", 1.f);
 
     float screen_width_dp = dm.widthPixels / dm.density;
     wide_screen = screen_width_dp >= WIDE_DEVICE_THRESHOLD;

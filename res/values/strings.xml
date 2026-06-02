@@ -61,6 +61,21 @@
     <string name="pref_split_variant_summary">Rows = original 5×5 QWERTY shape. Columns = each QWERTY row becomes a vertical column for wider, thumb-friendlier keys.</string>
     <string name="pref_split_variant_rows">Rows (original)</string>
     <string name="pref_split_variant_columns">Columns (rotated)</string>
+    <string name="pref_split_vertical_offset_title">Split mode vertical offset (%, + is up)</string>
+    <string name="pref_split_cutout_adapt_title">Adapt keys to the camera cutout</string>
+    <string name="pref_split_cutout_adapt_summary">Grow the key under the selfie-camera lens and move its label clear of the hole</string>
+    <string name="pref_custom_swipes_title">Custom swipe keys</string>
+    <string name="pref_custom_swipes_summary">Override the swipe-direction symbols on individual keys of the split keyboard</string>
+    <string name="pref_custom_swipes_dialog_hint">Center: the key to modify (e.g. \'q\', \'space\'). Around it: the key for each swipe direction. Leave a field empty to keep the default, or enter \'none\' to remove the default.</string>
+    <string name="custom_swipes_key">key</string>
+    <string name="custom_swipes_nw">↖</string>
+    <string name="custom_swipes_n">↑</string>
+    <string name="custom_swipes_ne">↗</string>
+    <string name="custom_swipes_w">←</string>
+    <string name="custom_swipes_e">→</string>
+    <string name="custom_swipes_sw">↙</string>
+    <string name="custom_swipes_s">↓</string>
+    <string name="custom_swipes_se">↘</string>
     <string name="pref_autocapitalisation_title">Automatic capitalisation</string>
     <string name="pref_autocapitalisation_summary">Press Shift at the beginning of a sentence</string>
     <string name="pref_change_method_key_replacement_title">Switching between input methods</string>
@@ -79,6 +94,10 @@
     <string name="pref_horizontal_margin_title">Horizontal margin</string>
     <string name="pref_character_size_title">Label size</string>
     <string name="pref_character_size_summary">Size of characters displayed on the keyboard (%.2fx)</string>
+    <string name="pref_main_label_size_title">Main symbol size</string>
+    <string name="pref_main_label_size_summary">Extra scaling of the main key symbols (%.2fx)</string>
+    <string name="pref_swipe_symbol_size_title">Swipe symbol size</string>
+    <string name="pref_swipe_symbol_size_summary">Extra scaling of the secondary swipe symbols (%.2fx)</string>
     <string name="pref_theme">Theme</string>
     <string name="pref_theme_e_system">System settings</string>
     <string name="pref_theme_e_dark">Dark</string>

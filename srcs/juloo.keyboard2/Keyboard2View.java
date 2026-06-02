@@ -456,8 +456,8 @@ public class Keyboard2View extends View
         _tc.row_height - _tc.vertical_margin,
         (width / 10 - _tc.horizontal_margin) * 3/2
         ) * _config.characterSize;
-    _mainLabelSize = labelBaseSize * _config.labelTextSize;
-    _subLabelSize = labelBaseSize * _config.sublabelTextSize;
+    _mainLabelSize = labelBaseSize * _config.labelTextSize * _config.main_label_scale;
+    _subLabelSize = labelBaseSize * _config.sublabelTextSize * _config.sublabel_scale;
     int height =
       (int)(_tc.row_height * _keyboard.keysHeight
           + _config.marginTop + _marginBottom);
@@ -471,8 +471,12 @@ public class Keyboard2View extends View
       float origH = origBottom - origTop;
       float newH = origH * _config.split_height_ratio;
       float pad = (origH - newH) / 2f;
-      _split_top = origTop + pad;
-      _split_bottom = origBottom - pad;
+      // Vertical-offset preference: shift the key area up (positive) or
+      // down (negative), clamped to the free space the height ratio left.
+      float shift = origH * _config.split_vertical_offset;
+      shift = Math.max(-pad, Math.min(pad, shift));
+      _split_top = origTop + pad - shift;
+      _split_bottom = origBottom - pad - shift;
       float gap = width * _config.split_center_ratio;
       _center_rect.left = (width - gap) / 2f;
       _center_rect.right = _center_rect.left + gap;
@@ -664,6 +668,10 @@ public class Keyboard2View extends View
   {
     _has_cutout = false;
     _cutout_rect.setEmpty();
+    // Disabled by preference: keys keep their uniform size and labels stay
+    // centered, even under the lens.
+    if (!_config.split_cutout_adapt)
+      return;
     if (VERSION.SDK_INT < 28)
       return;
     WindowInsets wi = getRootWindowInsets();
@@ -1074,6 +1082,30 @@ public class Keyboard2View extends View
     }
   }
 
+  /** Apply the user's per-key swipe-direction overrides (Settings →
+      custom swipe keys). Matched by the key's center value; overrides win
+      over the built-in split swipe assignments. The REMOVED placeholder
+      clears a slot. Applied before [strip_outward] so edge-key promotion
+      still works on the customized swipes. */
+  private KeyboardData.Key apply_custom_swipes(KeyboardData.Key k)
+  {
+    if (k == null || k.keys[0] == null || _config.custom_swipes.isEmpty())
+      return k;
+    KeyValue[] ov = _config.custom_swipes.get(k.keys[0]);
+    if (ov == null)
+      return k;
+    for (int i = 1; i < 9; i++)
+    {
+      KeyValue v = ov[i];
+      if (v == null)
+        continue;
+      boolean clear = v.getKind() == KeyValue.Kind.Placeholder
+        && v.getPlaceholder() == KeyValue.Placeholder.REMOVED;
+      k = k.withKeyValue(i, clear ? null : v);
+    }
+    return k;
+  }
+
   /** For keys on a physical L/R screen edge, consolidate the corner/
       horizontal swipes onto N (slot 7) and S (slot 8) instead of just
       dropping them. NW/NE swipes promote to N (with NE preferred), SW/SE
@@ -1111,7 +1143,7 @@ public class Keyboard2View extends View
   {
     if (k == null)
       return;
-    k = strip_outward(k, L, R, T, B);
+    k = strip_outward(apply_custom_swipes(k), L, R, T, B);
     _split_keys.add(new TriKey(k, _split_label_size, top, bottom, outerX,
           lx, by0, rx, by0, rx, by1, lx, by1));
   }
@@ -1165,8 +1197,8 @@ public class Keyboard2View extends View
       float lx = lx0 + c * cw, rx = lx + cw;
       KeyboardData.Key kA = idx < to ? keys.get(idx) : null; idx++;
       KeyboardData.Key kB = idx < to ? keys.get(idx) : null; idx++;
-      if (kA != null) kA = strip_outward(kA, false, false, T, B);
-      if (kB != null) kB = strip_outward(kB, false, false, T, B);
+      if (kA != null) kA = strip_outward(apply_custom_swipes(kA), false, false, T, B);
+      if (kB != null) kB = strip_outward(apply_custom_swipes(kB), false, false, T, B);
       // The cell's two keys are interlocking trapezoids: the dividing diagonal
       // is offset by [d] at top and bottom so neither key is pointed. Each key
       // is near-rectangular with one horizontal side fatter than the other.
@@ -1244,7 +1276,7 @@ public class Keyboard2View extends View
         if (kv != null)
         {
           Paint p = tc_key.label_paint(kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-              labelColor(kv, down, false), tk.labelSize);
+              labelColor(kv, down, false), tk.labelSize * _config.main_label_scale);
           p.setTextAlign(Paint.Align.CENTER);
           // If the camera cutout sits over this key, move the label into the
           // clear area above (or below) the hole so the letter stays visible.
@@ -1303,7 +1335,8 @@ public class Keyboard2View extends View
         float ax = tk.xs[i] + (tk.cx - tk.xs[i]) * 0.5f;
         float ay = tk.ys[i] + (tk.cy - tk.ys[i]) * 0.32f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-            labelColor(sk, down, true), tk.labelSize * 0.78f, Paint.Align.CENTER);
+            labelColor(sk, down, true), tk.labelSize * 0.78f * _config.sublabel_scale,
+            Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }
       // Orthogonal swipe sub-keys (N/S/E/W) drawn at edge midpoints. Only for
@@ -1327,7 +1360,8 @@ public class Keyboard2View extends View
         float ax = mx + (tk.cx - mx) * 0.30f;
         float ay = my + (tk.cy - my) * 0.30f;
         Paint p = tc_key.sublabel_paint(sk.hasFlagsAny(KeyValue.FLAG_KEY_FONT),
-            labelColor(sk, down, true), tk.labelSize * 0.78f, Paint.Align.CENTER);
+            labelColor(sk, down, true), tk.labelSize * 0.78f * _config.sublabel_scale,
+            Paint.Align.CENTER);
         canvas.drawText(sk.getString(), ax, ay - (p.ascent() + p.descent()) / 2f, p);
       }
     }

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="10dp">
+  <TextView
+      android:layout_width="fill_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginBottom="6dp"
+      android:text="@string/pref_custom_swipes_dialog_hint"
+      android:textSize="13sp"/>
+  <LinearLayout
+      android:layout_width="fill_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+    <EditText android:id="@+id/swipe_nw" android:hint="@string/custom_swipes_nw" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    <EditText android:id="@+id/swipe_n" android:hint="@string/custom_swipes_n" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    <EditText android:id="@+id/swipe_ne" android:hint="@string/custom_swipes_ne" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+  </LinearLayout>
+  <LinearLayout
+      android:layout_width="fill_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+    <EditText android:id="@+id/swipe_w" android:hint="@string/custom_swipes_w" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    <EditText android:id="@+id/key_center" android:hint="@string/custom_swipes_key" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    <EditText android:id="@+id/swipe_e" android:hint="@string/custom_swipes_e" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+  </LinearLayout>
+  <LinearLayout
+      android:layout_width="fill_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+    <EditText android:id="@+id/swipe_sw" android:hint="@string/custom_swipes_sw" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    <EditText android:id="@+id/swipe_s" android:hint="@string/custom_swipes_s" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+    <EditText android:id="@+id/swipe_se" android:hint="@string/custom_swipes_se" android:inputType="text" android:importantForAutofill="no" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
+  </LinearLayout>
+</LinearLayout>

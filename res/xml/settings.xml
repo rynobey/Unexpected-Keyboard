@@ -57,6 +57,8 @@
       <juloo.keyboard2.prefs.IntSlideBarPreference android:key="horizontal_margin_landscape_unfolded" android:title="@string/pref_landscape_unfolded" android:summary="%sdp" android:defaultValue="28" min="0" max="200"/>
     </PreferenceScreen>
     <juloo.keyboard2.prefs.SlideBarPreference android:key="character_size" android:title="@string/pref_character_size_title" android:summary="@string/pref_character_size_summary" android:defaultValue="1.15" min="0.75" max="1.5"/>
+    <juloo.keyboard2.prefs.SlideBarPreference android:key="main_label_size" android:title="@string/pref_main_label_size_title" android:summary="@string/pref_main_label_size_summary" android:defaultValue="1.0" min="0.5" max="2.0"/>
+    <juloo.keyboard2.prefs.SlideBarPreference android:key="swipe_symbol_size" android:title="@string/pref_swipe_symbol_size_title" android:summary="@string/pref_swipe_symbol_size_summary" android:defaultValue="1.0" min="0.5" max="2.0"/>
     <juloo.keyboard2.prefs.SlideBarPreference android:key="key_vertical_margin" android:title="@string/pref_key_vertical_space" android:summary="%s%%" android:defaultValue="1.5" min="0" max="5"/>
     <juloo.keyboard2.prefs.SlideBarPreference android:key="key_horizontal_margin" android:title="@string/pref_key_horizontal_space" android:summary="%s%%" android:defaultValue="2" min="0" max="5"/>
     <CheckBoxPreference android:key="border_config" android:title="@string/pref_border_config_title" android:defaultValue="false"/>
@@ -85,11 +87,25 @@
                                                   android:defaultValue="100"
                                                   min="30"
                                                   max="100"/>
+    <juloo.keyboard2.prefs.IntSlideBarPreference android:key="split_vertical_offset"
+                                                  android:title="@string/pref_split_vertical_offset_title"
+                                                  android:summary="%s%%"
+                                                  android:defaultValue="0"
+                                                  min="-35"
+                                                  max="35"/>
     <ListPreference android:key="split_variant"
                     android:title="@string/pref_split_variant_title"
                     android:summary="@string/pref_split_variant_summary"
                     android:entries="@array/pref_split_variant_entries"
                     android:entryValues="@array/pref_split_variant_values"
                     android:defaultValue="rows"/>
+    <CheckBoxPreference android:key="split_cutout_adapt"
+                        android:title="@string/pref_split_cutout_adapt_title"
+                        android:summary="@string/pref_split_cutout_adapt_summary"
+                        android:defaultValue="true"/>
+    <PreferenceScreen android:title="@string/pref_custom_swipes_title"
+                      android:summary="@string/pref_custom_swipes_summary">
+      <juloo.keyboard2.prefs.CustomKeySwipesPreference/>
+    </PreferenceScreen>
   </PreferenceCategory>
 </PreferenceScreen>
